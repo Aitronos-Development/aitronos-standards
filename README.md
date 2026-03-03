@@ -84,11 +84,47 @@ Skills are multi-step workflows that Claude Code can invoke. Each skill is a dir
 
 ### Agents
 
-Agents are persistent identities for Claude Code that define behavior across an entire session.
+Agents are persistent identities for Claude Code that define behavior across an entire session. Unlike skills (which are invoked once), agents shape Claude's behavior for the whole session — including after context compaction.
 
 | Agent | What It Is |
 |-------|------------|
 | `orchestrator.md` | Team lead agent that delegates to sub-developers, never writes code itself. Supports four modes: spec, execute, tasks, and live. |
+
+#### Launching the Orchestrator
+
+```bash
+# Start Claude Code as the orchestrator agent
+claude --agent orchestrator
+```
+
+This loads the orchestrator identity for the entire session. The agent definition reloads from disk after every context compaction, so the identity survives even when conversation history is lost.
+
+**How it works together:**
+- The **agent definition** (`.claude/agents/orchestrator.md`) sets the persistent identity — who Claude is and what it can/can't do
+- The **`/orchestrate` skill** is the operational playbook — detailed workflows for each mode (spec, execute, tasks, live)
+- The **`PreCompact` hook** (configured in `.claude/settings.json`) snapshots active teams and tasks before context compaction, so the orchestrator can recover its working state
+
+**Recommended `.claude/settings.json` hook** (add to your project):
+
+```json
+{
+  "hooks": {
+    "PreCompact": [
+      {
+        "matcher": "",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python3 .standards/scripts/orchestrator-state-snapshot.py"
+          }
+        ]
+      }
+    ]
+  }
+}
+```
+
+Without `--agent`, you can still invoke `/orchestrate` as a one-off skill during any session.
 
 ## Project Configuration
 

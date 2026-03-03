@@ -2,12 +2,10 @@
 # ============================================================================
 # Aitronos Standards — Project Setup Script
 #
-# Sets up shared engineering standards in any project via git submodule
-# and symlinks. Works on macOS and Linux.
+# Automatically detects project type, creates config, and symlinks shared
+# standards. No interactive prompts — everything is auto-detected.
 #
 # Usage:
-#   curl -sSL https://raw.githubusercontent.com/Aitronos-Development/aitronos-standards/main/scripts/setup.sh | bash
-#   # or
 #   .standards/scripts/setup.sh
 # ============================================================================
 
@@ -40,6 +38,170 @@ SKILLS_LINKED=0
 SKILLS_SKIPPED=0
 AGENTS_LINKED=0
 AGENTS_SKIPPED=0
+
+# ============================================================================
+# Auto-Detection Functions
+# ============================================================================
+
+detect_package_manager() {
+  if [ -f "pnpm-lock.yaml" ]; then echo "pnpm"
+  elif [ -f ".yarnrc.yml" ] || [ -f "yarn.lock" ]; then echo "yarn"
+  elif [ -f "bun.lockb" ]; then echo "bun"
+  elif [ -f "package-lock.json" ]; then echo "npm"
+  elif [ -f "uv.lock" ] || [ -f "pyproject.toml" ]; then echo "uv"
+  elif [ -f "Pipfile" ]; then echo "pipenv"
+  elif [ -f "go.mod" ]; then echo "go mod"
+  elif [ -f "Cargo.toml" ]; then echo "cargo"
+  else echo "unknown"
+  fi
+}
+
+detect_language() {
+  if [ -f "tsconfig.json" ] || [ -f "tsconfig.app.json" ]; then echo "typescript"
+  elif [ -f "package.json" ]; then echo "javascript"
+  elif [ -f "pyproject.toml" ] || [ -f "setup.py" ]; then echo "python"
+  elif [ -f "go.mod" ]; then echo "go"
+  elif [ -f "Cargo.toml" ]; then echo "rust"
+  elif [ -f "pom.xml" ] || [ -f "build.gradle" ]; then echo "java"
+  else echo "unknown"
+  fi
+}
+
+detect_framework() {
+  # Check package.json dependencies
+  if [ -f "package.json" ]; then
+    if grep -q '"vue"' package.json 2>/dev/null; then echo "vue"; return; fi
+    if grep -q '"react"' package.json 2>/dev/null; then echo "react"; return; fi
+    if grep -q '"next"' package.json 2>/dev/null; then echo "next.js"; return; fi
+    if grep -q '"nuxt"' package.json 2>/dev/null; then echo "nuxt"; return; fi
+    if grep -q '"svelte"' package.json 2>/dev/null; then echo "svelte"; return; fi
+    if grep -q '"angular' package.json 2>/dev/null; then echo "angular"; return; fi
+    if grep -q '"express"' package.json 2>/dev/null; then echo "express"; return; fi
+  fi
+  # Check Python
+  if [ -f "pyproject.toml" ]; then
+    if grep -q 'fastapi' pyproject.toml 2>/dev/null; then echo "fastapi"; return; fi
+    if grep -q 'django' pyproject.toml 2>/dev/null; then echo "django"; return; fi
+    if grep -q 'flask' pyproject.toml 2>/dev/null; then echo "flask"; return; fi
+  fi
+  # Check Go
+  if [ -f "go.mod" ]; then
+    if grep -q 'gin-gonic' go.mod 2>/dev/null; then echo "gin"; return; fi
+    if grep -q 'fiber' go.mod 2>/dev/null; then echo "fiber"; return; fi
+  fi
+  echo "none"
+}
+
+detect_project_type() {
+  local framework="$1"
+  case "$framework" in
+    vue|react|next.js|nuxt|svelte|angular) echo "frontend" ;;
+    fastapi|django|flask|express|gin|fiber) echo "backend" ;;
+    *)
+      # Heuristic: if src/ has index.html or main.ts, likely frontend
+      if [ -f "index.html" ] || [ -f "src/main.ts" ] || [ -f "src/index.tsx" ]; then
+        echo "frontend"
+      elif [ -d "app/" ] || [ -f "manage.py" ] || [ -f "main.go" ]; then
+        echo "backend"
+      else
+        echo "library"
+      fi
+      ;;
+  esac
+}
+
+detect_source_dir() {
+  if [ -d "src" ]; then echo "src/"
+  elif [ -d "app" ]; then echo "app/"
+  elif [ -d "lib" ]; then echo "lib/"
+  elif [ -d "pkg" ]; then echo "pkg/"
+  else echo "."
+  fi
+}
+
+detect_test_dir() {
+  if [ -d "tests" ]; then echo "tests/"
+  elif [ -d "test" ]; then echo "test/"
+  elif [ -d "src/__tests__" ]; then echo "src/__tests__/"
+  elif [ -d "__tests__" ]; then echo "__tests__/"
+  elif [ -d "spec" ]; then echo "spec/"
+  else echo "tests/"
+  fi
+}
+
+detect_test_command() {
+  local pkg_mgr="$1" lang="$2"
+  # Check package.json scripts
+  if [ -f "package.json" ]; then
+    if grep -q '"test"' package.json 2>/dev/null; then
+      echo "${pkg_mgr} test"
+      return
+    fi
+    # Check for vitest/jest directly
+    if grep -q '"vitest"' package.json 2>/dev/null; then echo "${pkg_mgr} vitest run"; return; fi
+    if grep -q '"jest"' package.json 2>/dev/null; then echo "${pkg_mgr} jest"; return; fi
+  fi
+  case "$lang" in
+    python) echo "uv run pytest tests/ -x -q --tb=short" ;;
+    go) echo "go test ./..." ;;
+    rust) echo "cargo test" ;;
+    *) echo "" ;;
+  esac
+}
+
+detect_lint_command() {
+  local pkg_mgr="$1" lang="$2"
+  if [ -f "package.json" ]; then
+    if grep -q '"lint"' package.json 2>/dev/null; then echo "${pkg_mgr} lint"; return; fi
+    if grep -q '"eslint"' package.json 2>/dev/null; then echo "${pkg_mgr} eslint src"; return; fi
+  fi
+  case "$lang" in
+    python) echo "uvx ruff check ." ;;
+    go) echo "golangci-lint run" ;;
+    rust) echo "cargo clippy" ;;
+    *) echo "" ;;
+  esac
+}
+
+detect_dev_command() {
+  local pkg_mgr="$1"
+  # Check for start-dev.sh first
+  if [ -f "start-dev.sh" ]; then echo "./start-dev.sh"; return; fi
+  # Check package.json
+  if [ -f "package.json" ]; then
+    if grep -q '"dev"' package.json 2>/dev/null; then echo "${pkg_mgr} dev"; return; fi
+    if grep -q '"start"' package.json 2>/dev/null; then echo "${pkg_mgr} start"; return; fi
+  fi
+  echo ""
+}
+
+detect_build_command() {
+  local pkg_mgr="$1"
+  if [ -f "package.json" ]; then
+    if grep -q '"build"' package.json 2>/dev/null; then echo "${pkg_mgr} build"; return; fi
+  fi
+  if [ -f "Dockerfile" ]; then echo "docker build ."; return; fi
+  echo ""
+}
+
+detect_credentials_file() {
+  if [ -f ".dev-credentials" ]; then echo ".dev-credentials"
+  elif [ -f ".env.local" ]; then echo ".env.local"
+  elif [ -f ".env" ]; then echo ".env"
+  else echo ""
+  fi
+}
+
+detect_run_prefix() {
+  local pkg_mgr="$1"
+  case "$pkg_mgr" in
+    pnpm) echo "pnpm" ;;
+    yarn) echo "yarn" ;;
+    bun) echo "bun" ;;
+    npm) echo "npx" ;;
+    *) echo "$pkg_mgr" ;;
+  esac
+}
 
 # ============================================================================
 # Step 0 — Verify git repo
@@ -77,87 +239,35 @@ fi
 echo ""
 
 # ============================================================================
-# Step 2 — Create project.config.yaml
+# Step 2 — Auto-detect project and create config
 # ============================================================================
 
-echo -e "${BOLD}Step 2: Project Configuration${NC}"
+echo -e "${BOLD}Step 2: Project Configuration (auto-detected)${NC}"
 
 if [ -f "$CONFIG_FILE" ]; then
   success "$CONFIG_FILE already exists — skipping"
 else
-  if [ -f "$SUBMODULE_DIR/project.config.example.yaml" ]; then
-    cp "$SUBMODULE_DIR/project.config.example.yaml" "$CONFIG_FILE"
-    success "Created $CONFIG_FILE from example"
-  else
-    warn "No example config found in $SUBMODULE_DIR — creating minimal config"
-    cat > "$CONFIG_FILE" << 'YAML'
-# Aitronos Standards — Project Configuration
-# See .standards/project.config.example.yaml for all available options.
+  # Auto-detect everything
+  proj_name="$(basename "$PROJECT_ROOT")"
+  proj_pkgmgr="$(detect_package_manager)"
+  proj_lang="$(detect_language)"
+  proj_framework="$(detect_framework)"
+  proj_type="$(detect_project_type "$proj_framework")"
+  proj_source="$(detect_source_dir)"
+  proj_tests="$(detect_test_dir)"
+  proj_run="$(detect_run_prefix "$proj_pkgmgr")"
+  proj_test_cmd="$(detect_test_command "$proj_run" "$proj_lang")"
+  proj_lint_cmd="$(detect_lint_command "$proj_run" "$proj_lang")"
+  proj_dev_cmd="$(detect_dev_command "$proj_run")"
+  proj_build_cmd="$(detect_build_command "$proj_run")"
+  proj_creds="$(detect_credentials_file)"
 
-project:
-  name: ""
-  type: ""
-  language: ""
-  framework: ""
-  package_manager: ""
+  info "Detected: $proj_name ($proj_lang / $proj_framework / $proj_pkgmgr)"
 
-commands:
-  test:
-    unit: ""
-  lint:
-    check: ""
-  dev:
-    start: ""
-
-paths:
-  source: ""
-  tests: ""
-YAML
-    success "Created minimal $CONFIG_FILE"
-  fi
-
-  echo ""
-  echo -e "${BOLD}Let's configure your project.${NC}"
-  echo "Press Enter to accept the default shown in [brackets]."
-  echo ""
-
-  read -rp "  Project name [$(basename "$PROJECT_ROOT")]: " proj_name
-  proj_name="${proj_name:-$(basename "$PROJECT_ROOT")}"
-
-  read -rp "  Project type (backend/frontend/fullstack/library/cli) [backend]: " proj_type
-  proj_type="${proj_type:-backend}"
-
-  read -rp "  Primary language (python/typescript/go/rust/java) [python]: " proj_lang
-  proj_lang="${proj_lang:-python}"
-
-  read -rp "  Framework (fastapi/vue/next.js/gin/none) [fastapi]: " proj_framework
-  proj_framework="${proj_framework:-fastapi}"
-
-  read -rp "  Package manager (uv/npm/pnpm/yarn/go mod) [uv]: " proj_pkgmgr
-  proj_pkgmgr="${proj_pkgmgr:-uv}"
-
-  read -rp "  Source directory [app/]: " proj_source
-  proj_source="${proj_source:-app/}"
-
-  read -rp "  Test directory [tests/]: " proj_tests
-  proj_tests="${proj_tests:-tests/}"
-
-  read -rp "  Unit test command [uv run pytest tests/ -x]: " proj_test_cmd
-  proj_test_cmd="${proj_test_cmd:-uv run pytest tests/ -x}"
-
-  read -rp "  Lint command [uvx ruff check .]: " proj_lint_cmd
-  proj_lint_cmd="${proj_lint_cmd:-uvx ruff check .}"
-
-  read -rp "  Dev server command [./start-dev.sh]: " proj_dev_cmd
-  proj_dev_cmd="${proj_dev_cmd:-./start-dev.sh}"
-
-  read -rp "  Credentials file (.dev-credentials / .env.local / none) [.dev-credentials]: " proj_creds
-  proj_creds="${proj_creds:-.dev-credentials}"
-
-  # Write the config using a heredoc — portable across macOS and Linux
   cat > "$CONFIG_FILE" << YAML
 # Aitronos Standards — Project Configuration
-# Generated by setup.sh on $(date +%Y-%m-%d)
+# Auto-generated by setup.sh on $(date +%Y-%m-%d)
+# Review and adjust values as needed.
 
 project:
   name: "$proj_name"
@@ -180,20 +290,20 @@ commands:
   dev:
     start: "$proj_dev_cmd"
   deps:
-    install: ""
-    sync: ""
+    install: "$proj_pkgmgr install"
+    sync: "$proj_pkgmgr install"
   migrations:
     generate: ""
     apply: ""
   build:
     dev: ""
-    prod: ""
+    prod: "$proj_build_cmd"
 
 paths:
   source: "$proj_source"
   tests: "$proj_tests"
   specs: "docs/.specs/"
-  public_docs: "docs/public-docs/"
+  public_docs: ""
   routes: ""
   schemas: ""
   services: ""
@@ -204,30 +314,29 @@ paths:
 credentials:
   file: "$proj_creds"
   refresh: ""
-  variables:
-    - ACCESS_TOKEN
-    - API_KEY
+  variables: []
 
 api_testing:
   base_url: "http://localhost:8000"
   health_endpoint: "/health"
   auth_header: "Authorization"
   auth_format: "Bearer {token}"
-  api_key_header: "x-api-key"
+  api_key_header: ""
   sdk:
     package: ""
     import: ""
 
 conventions:
-  auth: "dual"
+  auth: "bearer_only"
   errors: "custom_exceptions"
-  ids: "prefixed_uuid"
+  ids: "uuid"
   pagination: "cursor"
-  database: "async_sqlalchemy"
-  response: "envelope"
+  database: ""
+  response: "flat"
 YAML
 
-  success "Configuration written to $CONFIG_FILE"
+  success "Created $CONFIG_FILE (auto-detected)"
+  info "Review the config and adjust any values that don't look right"
 fi
 echo ""
 
@@ -263,7 +372,7 @@ if [ -d "$SUBMODULE_DIR/rules" ]; then
       RULES_SKIPPED=$((RULES_SKIPPED + 1))
     else
       ln -s "../../$SUBMODULE_DIR/rules/$name" "$target"
-      success "$target -> $rule"
+      success "$target"
       RULES_LINKED=$((RULES_LINKED + 1))
     fi
   done
@@ -289,7 +398,7 @@ if [ -d "$SUBMODULE_DIR/skills" ]; then
       SKILLS_SKIPPED=$((SKILLS_SKIPPED + 1))
     else
       ln -s "../../$SUBMODULE_DIR/skills/$name" "$target"
-      success "$target -> $skill_dir"
+      success "$target"
       SKILLS_LINKED=$((SKILLS_LINKED + 1))
     fi
   done
@@ -314,7 +423,7 @@ if [ -d "$SUBMODULE_DIR/agents" ]; then
       AGENTS_SKIPPED=$((AGENTS_SKIPPED + 1))
     else
       ln -s "../../$SUBMODULE_DIR/agents/$name" "$target"
-      success "$target -> $agent"
+      success "$target"
       AGENTS_LINKED=$((AGENTS_LINKED + 1))
     fi
   done
@@ -338,7 +447,7 @@ echo "  Skills:     $SKILLS_LINKED linked, $SKILLS_SKIPPED skipped (local overri
 echo "  Agents:     $AGENTS_LINKED linked, $AGENTS_SKIPPED skipped (local override)"
 echo ""
 echo -e "${BOLD}Next steps:${NC}"
-echo "  1. Review $CONFIG_FILE and fill in any empty values"
+echo "  1. Review $CONFIG_FILE and adjust any auto-detected values"
 echo "  2. Commit the changes:"
 echo "     git add .standards .claude $CONFIG_FILE"
 echo "     git commit -m \"chore: add shared engineering standards\""

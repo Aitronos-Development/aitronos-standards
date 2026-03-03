@@ -24,17 +24,19 @@ This creates a `.standards/` directory containing all shared rules, skills, agen
 .standards/scripts/setup.sh
 ```
 
-The script will:
-- Ask you about your project (name, language, framework, test commands, etc.)
-- Create `project.config.yaml` with your answers
-- Create `.claude/rules/`, `.claude/skills/`, and `.claude/agents/` directories
-- Symlink all shared standards into those directories
-- Skip any files where a local override already exists
+The script automatically:
+- **Detects** your project type, language, framework, and package manager (from `package.json`, `pyproject.toml`, `go.mod`, etc.)
+- **Creates** `project.config.yaml` with auto-detected values (test commands, lint commands, source directories)
+- **Creates** `.claude/rules/`, `.claude/skills/`, and `.claude/agents/` directories
+- **Symlinks** all shared standards into those directories
+- **Skips** any files where a local override already exists
+
+No interactive prompts — everything is auto-detected. Zero user input required.
 
 ### Step 3: Review and commit
 
 ```bash
-# Review the generated config and fill in any empty values
+# Review the auto-detected config and adjust if needed
 cat project.config.yaml
 
 # Commit everything

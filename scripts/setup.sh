@@ -1,0 +1,354 @@
+#!/usr/bin/env bash
+# ============================================================================
+# Aitronos Standards — Project Setup Script
+#
+# Sets up shared engineering standards in any project via git submodule
+# and symlinks. Works on macOS and Linux.
+#
+# Usage:
+#   curl -sSL https://raw.githubusercontent.com/Aitronos-Development/aitronos-standards/main/scripts/setup.sh | bash
+#   # or
+#   .standards/scripts/setup.sh
+# ============================================================================
+
+set -euo pipefail
+
+# Colors (disable if not a terminal)
+if [ -t 1 ]; then
+  GREEN='\033[0;32m'
+  YELLOW='\033[0;33m'
+  RED='\033[0;31m'
+  BLUE='\033[0;34m'
+  BOLD='\033[1m'
+  NC='\033[0m'
+else
+  GREEN='' YELLOW='' RED='' BLUE='' BOLD='' NC=''
+fi
+
+info()    { echo -e "${BLUE}[INFO]${NC}  $*"; }
+success() { echo -e "${GREEN}[OK]${NC}    $*"; }
+warn()    { echo -e "${YELLOW}[SKIP]${NC}  $*"; }
+error()   { echo -e "${RED}[ERROR]${NC} $*"; }
+
+SUBMODULE_URL="https://github.com/Aitronos-Development/aitronos-standards.git"
+SUBMODULE_DIR=".standards"
+CONFIG_FILE="project.config.yaml"
+
+RULES_LINKED=0
+RULES_SKIPPED=0
+SKILLS_LINKED=0
+SKILLS_SKIPPED=0
+AGENTS_LINKED=0
+AGENTS_SKIPPED=0
+
+# ============================================================================
+# Step 0 — Verify git repo
+# ============================================================================
+
+echo ""
+echo -e "${BOLD}Aitronos Standards — Project Setup${NC}"
+echo "========================================"
+echo ""
+
+if ! git rev-parse --show-toplevel > /dev/null 2>&1; then
+  error "Not inside a git repository. Please run this from your project root."
+  exit 1
+fi
+
+PROJECT_ROOT="$(git rev-parse --show-toplevel)"
+cd "$PROJECT_ROOT"
+info "Project root: $PROJECT_ROOT"
+echo ""
+
+# ============================================================================
+# Step 1 — Add submodule
+# ============================================================================
+
+echo -e "${BOLD}Step 1: Standards Submodule${NC}"
+
+if [ -d "$SUBMODULE_DIR" ] || [ -f "$SUBMODULE_DIR/.git" ]; then
+  success "$SUBMODULE_DIR already exists — updating"
+  git submodule update --init "$SUBMODULE_DIR" 2>/dev/null || true
+else
+  info "Adding submodule: $SUBMODULE_URL -> $SUBMODULE_DIR"
+  git submodule add "$SUBMODULE_URL" "$SUBMODULE_DIR"
+  success "Submodule added"
+fi
+echo ""
+
+# ============================================================================
+# Step 2 — Create project.config.yaml
+# ============================================================================
+
+echo -e "${BOLD}Step 2: Project Configuration${NC}"
+
+if [ -f "$CONFIG_FILE" ]; then
+  success "$CONFIG_FILE already exists — skipping"
+else
+  if [ -f "$SUBMODULE_DIR/project.config.example.yaml" ]; then
+    cp "$SUBMODULE_DIR/project.config.example.yaml" "$CONFIG_FILE"
+    success "Created $CONFIG_FILE from example"
+  else
+    warn "No example config found in $SUBMODULE_DIR — creating minimal config"
+    cat > "$CONFIG_FILE" << 'YAML'
+# Aitronos Standards — Project Configuration
+# See .standards/project.config.example.yaml for all available options.
+
+project:
+  name: ""
+  type: ""
+  language: ""
+  framework: ""
+  package_manager: ""
+
+commands:
+  test:
+    unit: ""
+  lint:
+    check: ""
+  dev:
+    start: ""
+
+paths:
+  source: ""
+  tests: ""
+YAML
+    success "Created minimal $CONFIG_FILE"
+  fi
+
+  echo ""
+  echo -e "${BOLD}Let's configure your project.${NC}"
+  echo "Press Enter to accept the default shown in [brackets]."
+  echo ""
+
+  read -rp "  Project name [$(basename "$PROJECT_ROOT")]: " proj_name
+  proj_name="${proj_name:-$(basename "$PROJECT_ROOT")}"
+
+  read -rp "  Project type (backend/frontend/fullstack/library/cli) [backend]: " proj_type
+  proj_type="${proj_type:-backend}"
+
+  read -rp "  Primary language (python/typescript/go/rust/java) [python]: " proj_lang
+  proj_lang="${proj_lang:-python}"
+
+  read -rp "  Framework (fastapi/vue/next.js/gin/none) [fastapi]: " proj_framework
+  proj_framework="${proj_framework:-fastapi}"
+
+  read -rp "  Package manager (uv/npm/pnpm/yarn/go mod) [uv]: " proj_pkgmgr
+  proj_pkgmgr="${proj_pkgmgr:-uv}"
+
+  read -rp "  Source directory [app/]: " proj_source
+  proj_source="${proj_source:-app/}"
+
+  read -rp "  Test directory [tests/]: " proj_tests
+  proj_tests="${proj_tests:-tests/}"
+
+  read -rp "  Unit test command [uv run pytest tests/ -x]: " proj_test_cmd
+  proj_test_cmd="${proj_test_cmd:-uv run pytest tests/ -x}"
+
+  read -rp "  Lint command [uvx ruff check .]: " proj_lint_cmd
+  proj_lint_cmd="${proj_lint_cmd:-uvx ruff check .}"
+
+  read -rp "  Dev server command [./start-dev.sh]: " proj_dev_cmd
+  proj_dev_cmd="${proj_dev_cmd:-./start-dev.sh}"
+
+  read -rp "  Credentials file (.dev-credentials / .env.local / none) [.dev-credentials]: " proj_creds
+  proj_creds="${proj_creds:-.dev-credentials}"
+
+  # Write the config using a heredoc — portable across macOS and Linux
+  cat > "$CONFIG_FILE" << YAML
+# Aitronos Standards — Project Configuration
+# Generated by setup.sh on $(date +%Y-%m-%d)
+
+project:
+  name: "$proj_name"
+  type: "$proj_type"
+  language: "$proj_lang"
+  framework: "$proj_framework"
+  package_manager: "$proj_pkgmgr"
+
+commands:
+  test:
+    unit: "$proj_test_cmd"
+    integration: ""
+    e2e: ""
+  lint:
+    check: "$proj_lint_cmd"
+    fix: ""
+  compliance:
+    fast: ""
+    full: ""
+  dev:
+    start: "$proj_dev_cmd"
+  deps:
+    install: ""
+    sync: ""
+  migrations:
+    generate: ""
+    apply: ""
+  build:
+    dev: ""
+    prod: ""
+
+paths:
+  source: "$proj_source"
+  tests: "$proj_tests"
+  specs: "docs/.specs/"
+  public_docs: "docs/public-docs/"
+  routes: ""
+  schemas: ""
+  services: ""
+  models: ""
+  repositories: ""
+  migrations: ""
+
+credentials:
+  file: "$proj_creds"
+  refresh: ""
+  variables:
+    - ACCESS_TOKEN
+    - API_KEY
+
+api_testing:
+  base_url: "http://localhost:8000"
+  health_endpoint: "/health"
+  auth_header: "Authorization"
+  auth_format: "Bearer {token}"
+  api_key_header: "x-api-key"
+  sdk:
+    package: ""
+    import: ""
+
+conventions:
+  auth: "dual"
+  errors: "custom_exceptions"
+  ids: "prefixed_uuid"
+  pagination: "cursor"
+  database: "async_sqlalchemy"
+  response: "envelope"
+YAML
+
+  success "Configuration written to $CONFIG_FILE"
+fi
+echo ""
+
+# ============================================================================
+# Step 3 — Create directories
+# ============================================================================
+
+echo -e "${BOLD}Step 3: Create Claude Code Directories${NC}"
+
+for dir in .claude/rules .claude/skills .claude/agents; do
+  if [ -d "$dir" ]; then
+    success "$dir exists"
+  else
+    mkdir -p "$dir"
+    success "Created $dir"
+  fi
+done
+echo ""
+
+# ============================================================================
+# Step 4 — Symlink rules
+# ============================================================================
+
+echo -e "${BOLD}Step 4: Link Shared Rules${NC}"
+
+if [ -d "$SUBMODULE_DIR/rules" ]; then
+  for rule in "$SUBMODULE_DIR"/rules/*.md; do
+    [ -f "$rule" ] || continue
+    name="$(basename "$rule")"
+    target=".claude/rules/$name"
+    if [ -e "$target" ] || [ -L "$target" ]; then
+      warn "$target (local file exists)"
+      RULES_SKIPPED=$((RULES_SKIPPED + 1))
+    else
+      ln -s "../../$SUBMODULE_DIR/rules/$name" "$target"
+      success "$target -> $rule"
+      RULES_LINKED=$((RULES_LINKED + 1))
+    fi
+  done
+else
+  warn "No rules directory in $SUBMODULE_DIR"
+fi
+echo ""
+
+# ============================================================================
+# Step 5 — Symlink skills
+# ============================================================================
+
+echo -e "${BOLD}Step 5: Link Shared Skills${NC}"
+
+if [ -d "$SUBMODULE_DIR/skills" ]; then
+  for skill_dir in "$SUBMODULE_DIR"/skills/*/; do
+    [ -d "$skill_dir" ] || continue
+    name="$(basename "$skill_dir")"
+
+    # Don't symlink the setup skill itself into projects
+    if [ "$name" = "setup" ]; then
+      continue
+    fi
+
+    target=".claude/skills/$name"
+    if [ -e "$target" ] || [ -L "$target" ]; then
+      warn "$target (local directory exists)"
+      SKILLS_SKIPPED=$((SKILLS_SKIPPED + 1))
+    else
+      ln -s "../../$SUBMODULE_DIR/skills/$name" "$target"
+      success "$target -> $skill_dir"
+      SKILLS_LINKED=$((SKILLS_LINKED + 1))
+    fi
+  done
+else
+  warn "No skills directory in $SUBMODULE_DIR"
+fi
+echo ""
+
+# ============================================================================
+# Step 6 — Symlink agents
+# ============================================================================
+
+echo -e "${BOLD}Step 6: Link Shared Agents${NC}"
+
+if [ -d "$SUBMODULE_DIR/agents" ]; then
+  for agent in "$SUBMODULE_DIR"/agents/*.md; do
+    [ -f "$agent" ] || continue
+    name="$(basename "$agent")"
+    target=".claude/agents/$name"
+    if [ -e "$target" ] || [ -L "$target" ]; then
+      warn "$target (local file exists)"
+      AGENTS_SKIPPED=$((AGENTS_SKIPPED + 1))
+    else
+      ln -s "../../$SUBMODULE_DIR/agents/$name" "$target"
+      success "$target -> $agent"
+      AGENTS_LINKED=$((AGENTS_LINKED + 1))
+    fi
+  done
+else
+  warn "No agents directory in $SUBMODULE_DIR"
+fi
+echo ""
+
+# ============================================================================
+# Summary
+# ============================================================================
+
+echo "========================================"
+echo -e "${BOLD}${GREEN}Setup Complete!${NC}"
+echo "========================================"
+echo ""
+echo "  Submodule:  $SUBMODULE_DIR"
+echo "  Config:     $CONFIG_FILE"
+echo "  Rules:      $RULES_LINKED linked, $RULES_SKIPPED skipped (local override)"
+echo "  Skills:     $SKILLS_LINKED linked, $SKILLS_SKIPPED skipped (local override)"
+echo "  Agents:     $AGENTS_LINKED linked, $AGENTS_SKIPPED skipped (local override)"
+echo ""
+echo -e "${BOLD}Next steps:${NC}"
+echo "  1. Review $CONFIG_FILE and fill in any empty values"
+echo "  2. Commit the changes:"
+echo "     git add .standards .claude $CONFIG_FILE"
+echo "     git commit -m \"chore: add shared engineering standards\""
+echo "  3. To override a shared standard, delete the symlink and create"
+echo "     a local file with the same name"
+echo "  4. To update standards later:"
+echo "     git submodule update --remote .standards"
+echo ""

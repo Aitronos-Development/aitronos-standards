@@ -1,38 +1,53 @@
 # Aitronos Engineering Standards
 
-Shared engineering standards for all Aitronos projects. This repository is designed to be added as a git submodule to any project, providing consistent rules, skills, and agents that work with Claude Code (and other AI coding tools).
+Shared engineering standards for all Aitronos projects. Add this repo as a git submodule to any project for consistent rules, skills, and agents that work with Claude Code (and other AI coding tools).
 
-Standards are universal -- they apply to Python backends, TypeScript frontends, Go services, or anything else. Project-specific details (commands, paths, conventions) live in a `project.config.yaml` file in each consuming project.
+Standards are universal — they apply to Python backends, TypeScript frontends, Go services, or anything else. Project-specific details (commands, paths, conventions) live in a `project.config.yaml` file in each consuming project.
 
-## Quick Start
+---
 
-Three steps to add standards to any project:
+## Setup Guide
+
+### Step 1: Add the submodule
+
+Run this in your project root:
 
 ```bash
-# 1. Add the submodule
 git submodule add https://github.com/Aitronos-Development/aitronos-standards.git .standards
-
-# 2. Run the setup script
-.standards/scripts/setup.sh
-
-# 3. Commit
-git add .standards .claude project.config.yaml
-git commit -m "chore: add shared engineering standards"
 ```
 
-The setup script will:
-- Copy the example config and ask you about your project
-- Create `.claude/rules/`, `.claude/skills/`, and `.claude/agents/` directories
-- Symlink all shared standards into those directories
-- Skip any file where a local override already exists
+This creates a `.standards/` directory containing all shared rules, skills, agents, and the setup tooling.
 
-Alternatively, if you use Claude Code, invoke the setup skill:
+### Step 2: Run setup
+
+Choose one of these two options:
+
+#### Option A: Claude Code (recommended)
+
+Open the project in Claude Code and run:
 
 ```
 /setup
 ```
 
-It does the same thing interactively within a Claude Code session.
+The `/setup` skill (now available via the submodule) walks you through everything interactively — it creates `project.config.yaml` for your stack, symlinks all shared rules/skills/agents into `.claude/`, and skips any files where a local override already exists.
+
+#### Option B: Shell script (no Claude Code needed)
+
+```bash
+.standards/scripts/setup.sh
+```
+
+The script does the same thing — creates directories, copies the config template, creates symlinks, and reports what it did.
+
+### Step 3: Commit
+
+```bash
+git add .standards .claude project.config.yaml
+git commit -m "chore: add shared engineering standards"
+```
+
+That's it. Your project now has shared engineering standards.
 
 ## What's Included
 

@@ -433,6 +433,67 @@ fi
 echo ""
 
 # ============================================================================
+# Step 7 — VS Code settings (prevent crashes)
+# ============================================================================
+
+echo -e "${BOLD}Step 7: VS Code Settings${NC}"
+
+VSCODE_DIR=".vscode"
+VSCODE_SETTINGS="$VSCODE_DIR/settings.json"
+
+# Required settings to prevent VS Code crashes with Claude Code
+REQUIRED_SETTINGS='{
+  "extensions.experimental.affinity": {
+    "claude-code": 1
+  },
+  "terminal.integrated.persistentSessionReviveProcess": "never"
+}'
+
+if [ ! -d "$VSCODE_DIR" ]; then
+  mkdir -p "$VSCODE_DIR"
+fi
+
+if [ -f "$VSCODE_SETTINGS" ]; then
+  # Check if settings already contain our keys
+  if grep -q "claude-code" "$VSCODE_SETTINGS" 2>/dev/null && \
+     grep -q "persistentSessionReviveProcess" "$VSCODE_SETTINGS" 2>/dev/null; then
+    success "VS Code settings already configured"
+  else
+    # Merge into existing settings using python (available everywhere)
+    if command -v python3 > /dev/null 2>&1; then
+      python3 -c "
+import json, sys
+try:
+    with open('$VSCODE_SETTINGS') as f:
+        existing = json.load(f)
+except (json.JSONDecodeError, FileNotFoundError):
+    existing = {}
+existing.setdefault('extensions.experimental.affinity', {})['claude-code'] = 1
+existing['terminal.integrated.persistentSessionReviveProcess'] = 'never'
+with open('$VSCODE_SETTINGS', 'w') as f:
+    json.dump(existing, f, indent=2)
+    f.write('\n')
+" && success "Merged Claude Code settings into $VSCODE_SETTINGS" \
+   || { warn "Could not merge settings — please add manually"; }
+    else
+      warn "python3 not found — please add these settings to $VSCODE_SETTINGS manually:"
+      echo "  $REQUIRED_SETTINGS"
+    fi
+  fi
+else
+  # Create new settings file
+  echo "$REQUIRED_SETTINGS" | python3 -c "
+import json, sys
+data = json.load(sys.stdin)
+with open('$VSCODE_SETTINGS', 'w') as f:
+    json.dump(data, f, indent=2)
+    f.write('\n')
+" 2>/dev/null || echo "$REQUIRED_SETTINGS" > "$VSCODE_SETTINGS"
+  success "Created $VSCODE_SETTINGS with Claude Code settings"
+fi
+echo ""
+
+# ============================================================================
 # Summary
 # ============================================================================
 
@@ -445,6 +506,7 @@ echo "  Config:     $CONFIG_FILE"
 echo "  Rules:      $RULES_LINKED linked, $RULES_SKIPPED skipped (local override)"
 echo "  Skills:     $SKILLS_LINKED linked, $SKILLS_SKIPPED skipped (local override)"
 echo "  Agents:     $AGENTS_LINKED linked, $AGENTS_SKIPPED skipped (local override)"
+echo "  VS Code:    $VSCODE_SETTINGS (crash prevention)"
 echo ""
 echo -e "${BOLD}Next steps:${NC}"
 echo "  1. Review $CONFIG_FILE and adjust any auto-detected values"

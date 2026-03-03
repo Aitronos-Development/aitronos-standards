@@ -321,15 +321,21 @@ The `/tech-spec` skill has the detailed template and conventions for specs. You 
 
    **This is the final gate before presenting results to the user.**
 
-9. **Update tracking** — After successful QA:
+9. **Mark phase as done** — After successful QA for each phase:
+   - **Rename the phase folder** to add `-done` suffix:
+     ```
+     phases/phase-1-vexa-integration/  →  phases/phase-1-vexa-integration-done/
+     ```
+     Use `mv` via Bash to rename. This makes it visually obvious in the file tree which phases are complete.
    - Update `ROADMAP.md` — mark phase as done, update progress
    - Resolve any concerns in `notes/concerns.md` that were addressed
    - Log any new decisions in `notes/decisions.md`
+   - **Do this IMMEDIATELY after each phase passes QA** — don't wait until all phases are done
 
 10. **Report to user** — Present summary: what was built, QA results (per-phase + final), any remaining issues.
 
 11. **Ship** — On approval:
-    - Rename phase docs to `-done` suffix
+    - Verify all completed phase folders have `-done` suffix
     - Shut down developers and QA agents (`SendMessage type="shutdown_request"`)
     - Clean up team (`TeamDelete`)
 

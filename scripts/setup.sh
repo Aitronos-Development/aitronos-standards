@@ -283,11 +283,6 @@ if [ -d "$SUBMODULE_DIR/skills" ]; then
     [ -d "$skill_dir" ] || continue
     name="$(basename "$skill_dir")"
 
-    # Don't symlink the setup skill itself into projects
-    if [ "$name" = "setup" ]; then
-      continue
-    fi
-
     target=".claude/skills/$name"
     if [ -e "$target" ] || [ -L "$target" ]; then
       warn "$target (local directory exists)"

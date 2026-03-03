@@ -18,36 +18,33 @@ git submodule add https://github.com/Aitronos-Development/aitronos-standards.git
 
 This creates a `.standards/` directory containing all shared rules, skills, agents, and the setup tooling.
 
-### Step 2: Run setup
-
-Choose one of these two options:
-
-#### Option A: Claude Code (recommended)
-
-Open the project in Claude Code and run:
-
-```
-/setup
-```
-
-The `/setup` skill (now available via the submodule) walks you through everything interactively — it creates `project.config.yaml` for your stack, symlinks all shared rules/skills/agents into `.claude/`, and skips any files where a local override already exists.
-
-#### Option B: Shell script (no Claude Code needed)
+### Step 2: Run the setup script
 
 ```bash
 .standards/scripts/setup.sh
 ```
 
-The script does the same thing — creates directories, copies the config template, creates symlinks, and reports what it did.
+The script will:
+- Ask you about your project (name, language, framework, test commands, etc.)
+- Create `project.config.yaml` with your answers
+- Create `.claude/rules/`, `.claude/skills/`, and `.claude/agents/` directories
+- Symlink all shared standards into those directories
+- Skip any files where a local override already exists
 
-### Step 3: Commit
+### Step 3: Review and commit
 
 ```bash
+# Review the generated config and fill in any empty values
+cat project.config.yaml
+
+# Commit everything
 git add .standards .claude project.config.yaml
 git commit -m "chore: add shared engineering standards"
 ```
 
 That's it. Your project now has shared engineering standards.
+
+After initial setup, the `/setup` skill is also available inside Claude Code (via the symlinked skill) for future re-runs when the standards repo adds new rules or skills.
 
 ## What's Included
 

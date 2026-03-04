@@ -145,6 +145,31 @@ See `project.config.example.yaml` for the full list of fields.
 
 ---
 
+## Updating Standards
+
+When the shared standards repo has new rules, skills, agents, or improvements:
+
+```bash
+.standards/scripts/update.sh
+```
+
+This script:
+1. Pulls the latest submodule commit
+2. Removes stale symlinks (pointing to deleted standards)
+3. Creates symlinks for any **new** rules, skills, or agents
+4. Ensures the PreCompact hook is configured
+5. Shows what changed and what to commit
+
+It never overwrites local overrides — existing files and symlinks are left untouched.
+
+**After running:**
+```bash
+git add .standards .claude
+git commit -m "chore: update shared engineering standards"
+```
+
+---
+
 ## Overriding Standards
 
 To replace any shared standard with a project-specific version:
@@ -220,7 +245,8 @@ aitronos-standards/
     tech-spec/SKILL.md
     test-fix/SKILL.md
   scripts/
-    setup.sh                    # Project setup (no Claude Code needed)
+    setup.sh                    # First-time project setup
+    update.sh                   # Pull latest standards and wire new symlinks
     orchestrator-guardrail.sh   # PreToolUse hook — blocks code writes in orchestrator mode
     orchestrator-state-snapshot.py  # PreCompact hook — snapshots state before compaction
   project.config.example.yaml

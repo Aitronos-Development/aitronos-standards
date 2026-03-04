@@ -91,6 +91,8 @@ your-project/
       orchestrator.md
     scripts/
       setup.sh
+      update.sh
+      orchestrator-guardrail.sh
       orchestrator-state-snapshot.py
 
   .claude/
@@ -113,24 +115,21 @@ Claude Code reads from `.claude/rules/`, `.claude/skills/`, and `.claude/agents/
 
 ## Updating standards
 
-When the shared standards repo is updated:
+When the shared standards repo has new or updated content:
 
 ```bash
-# Pull latest
-git submodule update --remote .standards
+.standards/scripts/update.sh
+```
 
-# Commit the submodule pointer update
-git add .standards
+This pulls the latest submodule, removes stale symlinks, creates symlinks for any new rules/skills/agents, and ensures the PreCompact hook is configured.
+
+```bash
+# Then commit the update
+git add .standards .claude
 git commit -m "chore: update shared engineering standards"
 ```
 
-New rules, skills, or agents added to the standards repo will NOT be automatically symlinked. Re-run the setup script to pick them up:
-
-```bash
-.standards/scripts/setup.sh
-```
-
-The script creates symlinks for new standards while leaving existing files (both symlinks and local overrides) untouched.
+The update script never overwrites local overrides.
 
 ## Removing standards
 

@@ -67,7 +67,14 @@ fi
 echo -e "${BOLD}Step 1: Pull Latest Standards${NC}"
 
 OLD_COMMIT=$(cd "$SUBMODULE_DIR" && git rev-parse --short HEAD)
-git submodule update --remote "$SUBMODULE_DIR" 2>/dev/null
+
+# --no-pull: skip remote fetch (used by post-merge hook when submodule is already updated)
+if [[ "${1:-}" != "--no-pull" ]]; then
+  git submodule update --remote "$SUBMODULE_DIR" 2>/dev/null
+else
+  git submodule update --init "$SUBMODULE_DIR" 2>/dev/null
+fi
+
 NEW_COMMIT=$(cd "$SUBMODULE_DIR" && git rev-parse --short HEAD)
 
 if [ "$OLD_COMMIT" = "$NEW_COMMIT" ]; then
@@ -224,6 +231,43 @@ with open('$CLAUDE_SETTINGS', 'w') as f:
   fi
 else
   warn "$CLAUDE_SETTINGS not found — run .standards/scripts/setup.sh first"
+fi
+echo ""
+
+# ============================================================================
+# Step 7 — Ensure post-merge git hook is installed
+# ============================================================================
+
+echo -e "${BOLD}Step 7: Verify Post-Merge Hook${NC}"
+
+SUBMODULE_DIR=".standards"
+GIT_HOOKS_DIR="$(git rev-parse --git-dir)/hooks"
+POST_MERGE_HOOK="$GIT_HOOKS_DIR/post-merge"
+MARKER="# aitronos-standards-post-merge"
+
+if [ -f "$POST_MERGE_HOOK" ] && grep -q "$MARKER" "$POST_MERGE_HOOK" 2>/dev/null; then
+  success "Post-merge hook already installed"
+elif [ -f "$POST_MERGE_HOOK" ]; then
+  cat >> "$POST_MERGE_HOOK" << HOOK
+
+$MARKER
+# Auto-sync standards after pull/merge
+if [ -x ".standards/scripts/hooks/post-merge" ]; then
+  .standards/scripts/hooks/post-merge
+fi
+HOOK
+  success "Appended standards sync to existing post-merge hook"
+else
+  cat > "$POST_MERGE_HOOK" << HOOK
+#!/usr/bin/env bash
+$MARKER
+# Auto-sync standards after pull/merge
+if [ -x ".standards/scripts/hooks/post-merge" ]; then
+  .standards/scripts/hooks/post-merge
+fi
+HOOK
+  chmod +x "$POST_MERGE_HOOK"
+  success "Created post-merge hook"
 fi
 echo ""
 

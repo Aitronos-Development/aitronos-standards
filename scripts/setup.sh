@@ -554,6 +554,47 @@ fi
 echo ""
 
 # ============================================================================
+# Step 9 — Install post-merge git hook (auto-sync on pull)
+# ============================================================================
+
+echo -e "${BOLD}Step 9: Git Post-Merge Hook${NC}"
+
+GIT_HOOKS_DIR="$(git rev-parse --git-dir)/hooks"
+POST_MERGE_HOOK="$GIT_HOOKS_DIR/post-merge"
+STANDARDS_HOOK="$SUBMODULE_DIR/scripts/hooks/post-merge"
+MARKER="# aitronos-standards-post-merge"
+
+if [ -f "$POST_MERGE_HOOK" ]; then
+  if grep -q "$MARKER" "$POST_MERGE_HOOK" 2>/dev/null; then
+    success "Post-merge hook already installed"
+  else
+    # Append to existing hook
+    cat >> "$POST_MERGE_HOOK" << HOOK
+
+$MARKER
+# Auto-sync standards after pull/merge
+if [ -x ".standards/scripts/hooks/post-merge" ]; then
+  .standards/scripts/hooks/post-merge
+fi
+HOOK
+    success "Appended standards sync to existing post-merge hook"
+  fi
+else
+  # Create new hook
+  cat > "$POST_MERGE_HOOK" << HOOK
+#!/usr/bin/env bash
+$MARKER
+# Auto-sync standards after pull/merge
+if [ -x ".standards/scripts/hooks/post-merge" ]; then
+  .standards/scripts/hooks/post-merge
+fi
+HOOK
+  chmod +x "$POST_MERGE_HOOK"
+  success "Created post-merge hook (auto-syncs standards on pull)"
+fi
+echo ""
+
+# ============================================================================
 # Summary
 # ============================================================================
 
@@ -567,6 +608,7 @@ echo "  Rules:      $RULES_LINKED linked, $RULES_SKIPPED skipped (local override
 echo "  Skills:     $SKILLS_LINKED linked, $SKILLS_SKIPPED skipped (local override)"
 echo "  Agents:     $AGENTS_LINKED linked, $AGENTS_SKIPPED skipped (local override)"
 echo "  Hooks:      $CLAUDE_SETTINGS (PreCompact for orchestrator)"
+echo "  Git hook:   post-merge (auto-syncs standards on pull)"
 echo "  VS Code:    $VSCODE_SETTINGS (crash prevention)"
 echo ""
 echo -e "${BOLD}Next steps:${NC}"

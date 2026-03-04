@@ -22,6 +22,7 @@ The script automatically:
 - **Creates** `.claude/rules/`, `.claude/skills/`, and `.claude/agents/` directories
 - **Symlinks** all shared standards into those directories
 - **Skips** any files where a local override already exists
+- **Installs a post-merge git hook** that auto-syncs standards after `git pull`
 
 No interactive prompts — everything is auto-detected. Zero user input required.
 
@@ -36,9 +37,23 @@ git add .standards .claude project.config.yaml
 git commit -m "chore: add shared engineering standards"
 ```
 
-## Step 4: Configure the PreCompact hook (recommended)
+## Step 4: Verify
 
-Add this to your `.claude/settings.json` to enable orchestrator state recovery across context compaction:
+```bash
+# Check that symlinks are in place
+ls -la .claude/rules/
+ls -la .claude/skills/
+ls -la .claude/agents/
+
+# Check that project config exists
+cat project.config.yaml
+```
+
+That's it. The setup script also configured:
+- **PreCompact hook** in `.claude/settings.json` (orchestrator state recovery across context compaction)
+- **Post-merge git hook** in `.git/hooks/post-merge` (auto-syncs standards after `git pull`)
+
+If `setup.sh` couldn't auto-configure the PreCompact hook (e.g., no `python3`), add it manually to `.claude/settings.json`:
 
 ```json
 {
@@ -58,27 +73,14 @@ Add this to your `.claude/settings.json` to enable orchestrator state recovery a
 }
 ```
 
-If you already have a `settings.json`, merge the `hooks` key into your existing config.
-
-## Step 5: Verify
-
-```bash
-# Check that symlinks are in place
-ls -la .claude/rules/
-ls -la .claude/skills/
-ls -la .claude/agents/
-
-# Check that project config exists
-cat project.config.yaml
-```
-
-That's it. Your project now has shared engineering standards.
-
 ## How it wires together
 
 ```
 your-project/
-  .standards/                    <-- git submodule (this repo)
+  .git/hooks/
+    post-merge                         <-- installed by setup.sh, delegates to .standards
+
+  .standards/                          <-- git submodule (this repo)
     rules/
       logging.md
       secrets-management.md
@@ -94,6 +96,8 @@ your-project/
       update.sh
       orchestrator-guardrail.sh
       orchestrator-state-snapshot.py
+      hooks/
+        post-merge              <-- auto-syncs standards after git pull
 
   .claude/
     rules/
@@ -115,21 +119,24 @@ Claude Code reads from `.claude/rules/`, `.claude/skills/`, and `.claude/agents/
 
 ## Updating standards
 
-When the shared standards repo has new or updated content:
+### Automatic (via post-merge hook)
+
+After `git pull`, if the `.standards` submodule changed, the post-merge hook automatically syncs new rules, skills, and agents. Just commit the result:
+
+```bash
+git add .standards .claude
+git commit -m "chore: update shared engineering standards"
+```
+
+### Manual
+
+To pull updates explicitly:
 
 ```bash
 .standards/scripts/update.sh
 ```
 
-This pulls the latest submodule, removes stale symlinks, creates symlinks for any new rules/skills/agents, and ensures the PreCompact hook is configured.
-
-```bash
-# Then commit the update
-git add .standards .claude
-git commit -m "chore: update shared engineering standards"
-```
-
-The update script never overwrites local overrides.
+This fetches the latest submodule commit, removes stale symlinks, creates symlinks for any new rules/skills/agents, and ensures hooks are configured. Never overwrites local overrides.
 
 ## Removing standards
 

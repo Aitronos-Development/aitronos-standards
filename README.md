@@ -147,26 +147,31 @@ See `project.config.example.yaml` for the full list of fields.
 
 ## Updating Standards
 
-When the shared standards repo has new rules, skills, agents, or improvements:
+### Automatic (recommended)
+
+A **post-merge git hook** is installed by `setup.sh`. After any `git pull` or `git merge` that updates the `.standards` submodule, the hook automatically:
+1. Initializes and checks out the new submodule commit
+2. Removes stale symlinks (pointing to deleted standards)
+3. Creates symlinks for any **new** rules, skills, or agents
+4. Ensures the PreCompact hook and post-merge hook are configured
+
+No manual steps needed — just commit the updated submodule pointer:
+```bash
+git add .standards .claude
+git commit -m "chore: update shared engineering standards"
+```
+
+### Manual
+
+To pull updates explicitly (e.g., before the submodule pointer is committed upstream):
 
 ```bash
 .standards/scripts/update.sh
 ```
 
-This script:
-1. Pulls the latest submodule commit
-2. Removes stale symlinks (pointing to deleted standards)
-3. Creates symlinks for any **new** rules, skills, or agents
-4. Ensures the PreCompact hook is configured
-5. Shows what changed and what to commit
+This does the same as the automatic hook, plus fetches the latest remote commit.
 
 It never overwrites local overrides — existing files and symlinks are left untouched.
-
-**After running:**
-```bash
-git add .standards .claude
-git commit -m "chore: update shared engineering standards"
-```
 
 ---
 
@@ -249,6 +254,8 @@ aitronos-standards/
     update.sh                   # Pull latest standards and wire new symlinks
     orchestrator-guardrail.sh   # PreToolUse hook — blocks code writes in orchestrator mode
     orchestrator-state-snapshot.py  # PreCompact hook — snapshots state before compaction
+    hooks/
+      post-merge                # Auto-syncs standards after git pull/merge
   project.config.example.yaml
   SETUP.md                      # Installation guide
   README.md                     # This file
@@ -267,3 +274,9 @@ Rules are plain Markdown and work with any tool that reads from a rules director
 
 **Q: Can different projects use different versions?**
 Yes. The submodule pointer pins to a specific commit. Each project updates independently.
+
+**Q: How does the post-merge hook work?**
+`setup.sh` installs a git hook at `.git/hooks/post-merge`. After `git pull`, it checks if `.standards` changed. If so, it runs `update.sh --no-pull` to sync new symlinks without re-fetching. The hook delegates to `.standards/scripts/hooks/post-merge`, so the logic updates when you pull new standards.
+
+**Q: What if I already have a post-merge hook?**
+The setup script appends to existing hooks instead of overwriting. It uses a `# aitronos-standards-post-merge` marker to avoid duplicate entries.

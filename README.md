@@ -88,6 +88,19 @@ If you're already in a regular Claude Code session, invoke the orchestrator work
 | **tasks** | "Fix these bugs", "Here are some tasks" | Parse items, create tasks, spawn developers immediately |
 | **live** | Ongoing conversation, iterative requests | Real-time dispatch — research, delegate, iterate |
 
+### Code write guardrail
+
+A `PreToolUse` hook defined in the orchestrator's agent frontmatter **blocks** any `Edit` or `Write` to non-documentation files. If the orchestrator tries to modify a `.py`, `.ts`, `.tsx`, or other code file, the tool call is blocked (exit code 2) and Claude receives a message telling it to delegate to a developer agent instead.
+
+**Allowed** (orchestrator can write directly):
+- `.md`, `.mdc`, `.mdx`, `.txt`, `.yaml`, `.yml` files
+- Files in `docs/`, `.claude/`, `.standards/`, `.specs/`, `.agent/`, `.kiro/`, `.cursor/` directories
+
+**Blocked** (must delegate to a developer agent):
+- Everything else — Python, TypeScript, JSON configs, Dockerfiles, etc.
+
+The guardrail lives in `scripts/orchestrator-guardrail.sh` and only fires when running as the orchestrator agent. Normal Claude Code sessions are unaffected.
+
 ### Context compaction recovery
 
 When context is compacted, the orchestrator recovers by:
@@ -208,7 +221,8 @@ aitronos-standards/
     test-fix/SKILL.md
   scripts/
     setup.sh                    # Project setup (no Claude Code needed)
-    orchestrator-state-snapshot.py  # PreCompact hook for orchestrator
+    orchestrator-guardrail.sh   # PreToolUse hook — blocks code writes in orchestrator mode
+    orchestrator-state-snapshot.py  # PreCompact hook — snapshots state before compaction
   project.config.example.yaml
   SETUP.md                      # Installation guide
   README.md                     # This file

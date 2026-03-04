@@ -44,17 +44,24 @@ All presets are defined in `src/assets/transitions.css` and use tokens from `ani
 **ALWAYS use animation tokens. NEVER hardcode durations or easing.**
 
 ```css
-/* Durations */
---ait-animation-duration-fast: 0.15s;   /* exits, micro-interactions */
---ait-animation-duration-normal: 0.2s;  /* standard transitions */
---ait-animation-duration-slow: 0.3s;    /* entrances, large movements */
+/* ─── Transition Durations ─── */
+--ait-animation-duration-fast: 0.15s;    /* Exits, micro-interactions, hover/focus */
+--ait-animation-duration-normal: 0.2s;   /* Standard transitions, state changes */
+--ait-animation-duration-slow: 0.3s;     /* Entrances, large movements, panels */
 
-/* Easing */
---ait-easing-default: cubic-bezier(0.4, 0, 0.2, 1);  /* general */
---ait-easing-enter: cubic-bezier(0.0, 0, 0.2, 1);    /* appearing */
---ait-easing-exit: cubic-bezier(0.4, 0, 1, 1);       /* leaving */
---ait-easing-spring: cubic-bezier(0.16, 1, 0.3, 1);  /* overshoot */
+/* ─── Continuous Animation Durations ─── */
+--ait-animation-duration-spin: 0.8s;     /* Loading spinners (linear, infinite) */
+--ait-animation-duration-shimmer: 1.5s;  /* Skeleton shimmer/pulse (ease, infinite) */
+--ait-animation-duration-pulse: 2s;      /* Live indicators, glows (ease-in-out, infinite) */
+
+/* ─── Easing Curves ─── */
+--ait-easing-default: cubic-bezier(0.4, 0, 0.2, 1);  /* Hover, focus, color changes */
+--ait-easing-enter: cubic-bezier(0.0, 0, 0.2, 1);    /* Content appearing */
+--ait-easing-exit: cubic-bezier(0.4, 0, 1, 1);       /* Content leaving */
+--ait-easing-spring: cubic-bezier(0.16, 1, 0.3, 1);  /* Panels, modals, popovers */
 ```
+
+**Compliance:** `bash scripts/compliance/check-transitions.sh`
 
 ## How to Animate Common Patterns
 

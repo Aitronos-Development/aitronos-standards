@@ -433,7 +433,67 @@ fi
 echo ""
 
 # ============================================================================
-# Step 7 — VS Code settings (prevent crashes)
+# Step 7 — Configure PreCompact hook for orchestrator state recovery
+# ============================================================================
+
+echo -e "${BOLD}Step 7: PreCompact Hook${NC}"
+
+CLAUDE_SETTINGS=".claude/settings.json"
+
+if [ -f "$CLAUDE_SETTINGS" ]; then
+  if grep -q "PreCompact" "$CLAUDE_SETTINGS" 2>/dev/null; then
+    success "PreCompact hook already configured in $CLAUDE_SETTINGS"
+  else
+    # Merge PreCompact hook into existing settings
+    if command -v python3 > /dev/null 2>&1; then
+      python3 -c "
+import json
+with open('$CLAUDE_SETTINGS') as f:
+    settings = json.load(f)
+settings.setdefault('hooks', {})['PreCompact'] = [{
+    'matcher': '',
+    'hooks': [{
+        'type': 'command',
+        'command': 'python3 .standards/scripts/orchestrator-state-snapshot.py'
+    }]
+}]
+with open('$CLAUDE_SETTINGS', 'w') as f:
+    json.dump(settings, f, indent=2)
+    f.write('\n')
+" && success "Added PreCompact hook to $CLAUDE_SETTINGS" \
+   || warn "Could not merge PreCompact hook — add manually (see SETUP.md)"
+    else
+      warn "python3 not found — add PreCompact hook manually (see SETUP.md)"
+    fi
+  fi
+else
+  # Create new settings file with PreCompact hook
+  if command -v python3 > /dev/null 2>&1; then
+    python3 -c "
+import json
+settings = {
+    'hooks': {
+        'PreCompact': [{
+            'matcher': '',
+            'hooks': [{
+                'type': 'command',
+                'command': 'python3 .standards/scripts/orchestrator-state-snapshot.py'
+            }]
+        }]
+    }
+}
+with open('$CLAUDE_SETTINGS', 'w') as f:
+    json.dump(settings, f, indent=2)
+    f.write('\n')
+" && success "Created $CLAUDE_SETTINGS with PreCompact hook"
+  else
+    warn "python3 not found — create $CLAUDE_SETTINGS manually (see SETUP.md)"
+  fi
+fi
+echo ""
+
+# ============================================================================
+# Step 8 — VS Code settings (prevent crashes)
 # ============================================================================
 
 echo -e "${BOLD}Step 7: VS Code Settings${NC}"
@@ -506,6 +566,7 @@ echo "  Config:     $CONFIG_FILE"
 echo "  Rules:      $RULES_LINKED linked, $RULES_SKIPPED skipped (local override)"
 echo "  Skills:     $SKILLS_LINKED linked, $SKILLS_SKIPPED skipped (local override)"
 echo "  Agents:     $AGENTS_LINKED linked, $AGENTS_SKIPPED skipped (local override)"
+echo "  Hooks:      $CLAUDE_SETTINGS (PreCompact for orchestrator)"
 echo "  VS Code:    $VSCODE_SETTINGS (crash prevention)"
 echo ""
 echo -e "${BOLD}Next steps:${NC}"

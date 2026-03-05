@@ -26,7 +26,19 @@ The script automatically:
 
 No interactive prompts — everything is auto-detected. Zero user input required.
 
-## Step 3: Review and commit
+## Step 3: Create `start-dev.sh`
+
+Every project needs a `start-dev.sh` at the root. Copy the skeleton from `.standards/guides/start-dev-reference.md` and customize for your project:
+
+```bash
+# Copy the skeleton from the reference guide (bottom of the file)
+# Customize: REQUIRED_TOOLS, server start command, migration command, etc.
+chmod +x start-dev.sh
+```
+
+See `.standards/rules/start-dev.md` for the mandatory requirements.
+
+## Step 4: Review and commit
 
 ```bash
 # Review the auto-detected config and adjust if needed
@@ -37,7 +49,7 @@ git add .standards .claude project.config.yaml
 git commit -m "chore: add shared engineering standards"
 ```
 
-## Step 4: Verify
+## Step 5: Verify
 
 ```bash
 # Check that symlinks are in place

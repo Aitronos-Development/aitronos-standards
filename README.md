@@ -23,6 +23,7 @@ Rules are engineering standards loaded automatically from `.claude/rules/`. Each
 | `planning.md` | Always check existing implementations before planning new features |
 | `secrets-management.md` | Never hardcode secrets — use .env locally, GitHub Secrets in CI/CD |
 | `self-testable-code.md` | All code must be self-tested before shipping |
+| `start-dev.md` | Every project must have a `start-dev.sh` — zero to running in one command |
 | `task-reference-comments.md` | No "Task X.Y:" comments — use TODO/FIXME or proper comments |
 
 ### Skills
@@ -229,6 +230,8 @@ To revert, delete the local file and re-run `.standards/scripts/setup.sh`.
 aitronos-standards/
   agents/
     orchestrator.md             # Team lead agent definition
+  guides/
+    start-dev-reference.md        # Full start-dev.sh implementation guide with skeleton
   rules/
     branch-naming.md
     code-organization.md
@@ -239,6 +242,7 @@ aitronos-standards/
     planning.md
     secrets-management.md
     self-testable-code.md
+    start-dev.md
     task-reference-comments.md
   skills/
     compliance-fix/SKILL.md

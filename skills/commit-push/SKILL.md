@@ -1,22 +1,23 @@
 ---
 name: commit-push
-description: Stage all changes (including submodules), commit with an auto-generated message, fix any pre-commit hook failures, and push. Handles submodules, compliance issues, and hook failures automatically.
+description: Stage all changes (including submodules), commit with an auto-generated message, fix ALL pre-commit hook and compliance failures, and push. Handles submodules automatically. NEVER uses --no-verify.
 disable-model-invocation: false
 user-invocable: true
-allowed-tools: Bash, Read, Grep, Glob
+allowed-tools: Bash, Read, Grep, Glob, Write, Edit, Agent
 ---
 
 # Commit & Push
 
 > **Project Configuration**: Before using this skill, read `project.config.yaml` in the project root. It defines project-specific paths, commands, conventions, and tooling.
 
-Stage all changes, generate contextual commit messages, handle pre-commit hook failures automatically, and push to the remote — **including all submodules with pending changes**.
+Stage all changes, generate contextual commit messages, **fix every compliance and hook failure**, and push to the remote — **including all submodules with pending changes**.
 
-## When to Use
+## ABSOLUTE RULES
 
-- You want to commit and push your work in one step
-- You want compliance/lint issues caught and fixed before the commit lands
-- You want submodule changes committed and pushed alongside the parent repo
+1. **NEVER use `--no-verify`** — not on commit, not on push, not ever. If hooks fail, fix the code.
+2. **NEVER skip or bypass compliance errors** — every error must be fixed before committing.
+3. **Fix issues yourself** — don't ask the user to fix things. Read the error, find the file, fix it.
+4. **No partial fixes** — the commit must pass all hooks and checks cleanly.
 
 ## Usage
 
@@ -82,7 +83,7 @@ git add -A
 git commit -m "[message]"
 ```
 
-If hooks fail: re-stage and retry (same logic as Step 6 below, max 3 attempts).
+If hooks fail: read every error, fix every issue, re-stage and retry. Same fix loop as Step 8 below.
 
 #### 2f. Push the submodule
 
@@ -141,28 +142,47 @@ git add -A
 
 This stages everything including updated submodule pointers.
 
-### Step 7: Run Compliance Checks (if configured)
+### Step 7: Pre-Commit Compliance Fix Loop
 
-If the project has compliance/lint commands configured:
+**Before attempting the commit**, proactively run compliance checks and fix everything:
 
 ```bash
 {{config:commands.compliance.fast}}
 ```
 
-If there are violations:
-1. **Auto-fix** what can be fixed:
-   ```bash
-   {{config:commands.lint.fix}}
-   {{config:commands.lint.format}}
-   ```
-2. **Manually fix** remaining issues
-3. **Re-run compliance** to confirm zero errors
-4. **Re-stage** after fixes:
-   ```bash
-   git add -A
-   ```
+If no compliance command is configured, skip to Step 8.
 
-### Step 8: Commit (with Pre-commit Hook Handling)
+**Parse EVERY error from the output and fix it.** Common error categories:
+
+#### Ruff Lint Errors (e.g., `F841 unused variable`, `E501 line too long`)
+- Read the file at the reported line
+- Fix the issue (remove unused variable, split long line, add missing import, etc.)
+- These are code issues — fix the code
+
+#### Forbidden Terms Errors (vendor names in public docs)
+- Read the file, find the forbidden term
+- Replace with the approved alternative (see vendor-terms rules)
+
+#### Doc Accuracy Errors (endpoint not found in OpenAPI spec)
+- If the endpoint exists in the codebase but is missing from OpenAPI: regenerate the spec
+- If the doc references an endpoint that doesn't exist yet: remove or update the doc
+- If the endpoint path in the doc is wrong: fix the path to match the actual route
+
+#### File Size / Complexity Errors
+- Split large files or functions as needed
+
+#### Auth Pattern Errors
+- Update to use `get_auth_context` instead of `get_current_user`
+
+After fixing, re-run compliance:
+
+```bash
+{{config:commands.compliance.fast}}
+```
+
+**Repeat this fix loop until compliance reports 0 critical errors.** Maximum 5 iterations. If after 5 iterations there are still errors, list every remaining error and ask the user — but do NOT use `--no-verify`.
+
+### Step 8: Commit (with Pre-commit Hook Fix Loop)
 
 Attempt the commit:
 
@@ -170,38 +190,36 @@ Attempt the commit:
 git commit -m "[message]"
 ```
 
-**If commit succeeds**: Report success and continue to Step 9.
+**If commit succeeds**: Continue to Step 9.
 
 **If commit fails due to pre-commit hooks**:
 
-Pre-commit hooks (ruff, formatting, trailing whitespace, etc.) may auto-fix files. When this happens:
+Pre-commit hooks run a second layer of checks (ruff, formatting, trailing whitespace, etc.). When they fail:
 
-1. Report: "Pre-commit hooks made fixes, re-staging..."
+1. **Read the FULL error output carefully.** Parse every single error message.
 
-2. Re-stage all changes (hooks may have modified files):
+2. **For each error, fix it:**
+   - Ruff lint error → read the file, fix the code
+   - Ruff format → run `{{config:commands.lint.fix}}`
+   - Trailing whitespace → the hook usually auto-fixes this, just re-stage
+   - End of file fixer → the hook usually auto-fixes this, just re-stage
+   - Merge conflict markers → you have leftover conflict markers, remove them
+   - Large file detected → remove or gitignore the file
+   - Compliance check errors → fix each one (see Step 7 categories above)
+
+3. **Re-stage all changes** (hooks and your fixes may have modified files):
    ```bash
    git add -A
    ```
 
-3. Retry the commit with the same message:
+4. **Retry the commit** with the same message:
    ```bash
    git commit -m "[same message]"
    ```
 
-4. If it fails again, run the project's compliance/lint fix:
-   ```bash
-   {{config:commands.compliance}}
-   {{config:commands.lint.fix}}
-   {{config:commands.lint.format}}
-   ```
+5. **If it fails again**, read the NEW error output. It may be different errors now. Fix those too. Re-stage and retry.
 
-5. Re-stage and retry:
-   ```bash
-   git add -A
-   git commit -m "[same message]"
-   ```
-
-6. If it still fails after 3 attempts total, report the remaining errors to the user and stop.
+6. **Repeat** until the commit succeeds. Maximum 5 attempts total. If after 5 attempts it still fails, list every remaining error and ask the user — but do NOT use `--no-verify`.
 
 ### Step 9: Push to Remote
 
@@ -215,7 +233,12 @@ If push fails because there's no upstream branch:
 git push --set-upstream origin $(git branch --show-current)
 ```
 
-If push fails for other reasons (e.g., rejected because remote has new commits):
+If push fails because `pre-commit` is not found (stale hook path):
+- Reinstall hooks: `uv run pre-commit install` or fix the hook's Python path
+- Then retry the push
+- Do NOT use `--no-verify`
+
+If push fails because remote has new commits:
 
 ```bash
 git pull --rebase && git push
@@ -238,6 +261,9 @@ Submodules:
 Parent repo ([branch]):
   [commit hash] [commit message]
   [N files changed, X insertions, Y deletions]
+
+Fixes applied:
+  - [list any issues that were fixed during the process]
 ```
 
 </workflow>
@@ -246,8 +272,22 @@ Parent repo ([branch]):
 
 - **Submodule push rejected**: Pull --rebase and retry. If conflicts, stop and report.
 - **Parent push rejected**: Pull --rebase and retry. If conflicts, stop and report.
-- **Unfixable compliance errors**: List remaining issues and ask the user how to proceed. Do not commit with known errors unless the user explicitly approves.
+- **Compliance errors**: Fix every single one. Parse the error, read the file, fix it. Loop until clean.
+- **Pre-commit hook errors**: Fix every single one. Parse the error, read the file, fix it. Loop until clean.
+- **Stale pre-commit hook** (`pre-commit not found`): Reinstall hooks, do NOT use `--no-verify`.
 - **No changes anywhere**: Exit early with a message.
+
+## FORBIDDEN — Hard Bans
+
+These are **never acceptable**, regardless of circumstances:
+
+| Forbidden | Why | Do Instead |
+|-----------|-----|------------|
+| `--no-verify` on commit | Bypasses all quality checks | Fix the issues |
+| `--no-verify` on push | Bypasses push hooks | Fix the issues or reinstall hooks |
+| Committing with known errors | Ships broken code | Fix every error first |
+| Asking user to fix lint/format | Wastes their time | You have the tools, fix it yourself |
+| Skipping compliance "because pre-existing" | Pre-existing errors are still errors | Fix them or, if truly out of scope and unfixable, ask user |
 
 ## Important Notes
 
@@ -255,8 +295,7 @@ Parent repo ([branch]):
 - Always use `git add -A` to stage everything (untracked, modified, deleted)
 - Pre-commit hooks in most Aitronos projects run ruff (lint + format), trailing-whitespace, end-of-file-fixer, and other auto-fixers
 - The most common hook failure pattern: hooks auto-fix files, which means the commit fails but the fixes are already applied — just re-stage and retry
-- Never skip hooks (`--no-verify`) — always fix the underlying issues
-- Maximum 3 commit attempts before giving up (per repo/submodule)
+- Maximum 5 commit attempts (per repo/submodule) — but you should be fixing issues between each attempt, not just retrying blindly
 - If the user provides a custom message, use it exactly as given (for parent repo only)
 - Never force-push — if push is rejected, report the issue
 - **NEVER add Co-Authored-By, Signed-off-by, or any trailer that identifies an AI** — commits must use the user's git identity only, with no AI attribution in the git history

@@ -176,8 +176,6 @@ deps(security): upgrade vulnerable dependencies
 
 Fixes Dependabot alerts: #N, #M, ...
 Packages upgraded: package1 (x.y.z -> a.b.c), package2 (...)
-
-Co-Authored-By: Claude <noreply@anthropic.com>
 EOF
 )"
 ```

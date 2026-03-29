@@ -272,6 +272,41 @@ fi
 echo ""
 
 # ============================================================================
+# Step 8 — Ensure prepare-commit-msg hook is installed (strip AI attribution)
+# ============================================================================
+
+echo -e "${BOLD}Step 8: Verify Prepare-Commit-Msg Hook${NC}"
+
+PREPARE_COMMIT_HOOK="$GIT_HOOKS_DIR/prepare-commit-msg"
+PREPARE_MARKER="# aitronos-standards-prepare-commit-msg"
+
+if [ -f "$PREPARE_COMMIT_HOOK" ] && grep -q "$PREPARE_MARKER" "$PREPARE_COMMIT_HOOK" 2>/dev/null; then
+  success "Prepare-commit-msg hook already installed"
+elif [ -f "$PREPARE_COMMIT_HOOK" ]; then
+  cat >> "$PREPARE_COMMIT_HOOK" << HOOK
+
+$PREPARE_MARKER
+# Strip AI attribution from commit messages (Co-Authored-By, Signed-off-by)
+if [ -x ".standards/scripts/hooks/prepare-commit-msg" ]; then
+  .standards/scripts/hooks/prepare-commit-msg "\$1" "\$2" "\$3"
+fi
+HOOK
+  success "Appended AI attribution stripper to existing prepare-commit-msg hook"
+else
+  cat > "$PREPARE_COMMIT_HOOK" << HOOK
+#!/usr/bin/env bash
+$PREPARE_MARKER
+# Strip AI attribution from commit messages (Co-Authored-By, Signed-off-by)
+if [ -x ".standards/scripts/hooks/prepare-commit-msg" ]; then
+  .standards/scripts/hooks/prepare-commit-msg "\$1" "\$2" "\$3"
+fi
+HOOK
+  chmod +x "$PREPARE_COMMIT_HOOK"
+  success "Created prepare-commit-msg hook (strips AI attribution from commits)"
+fi
+echo ""
+
+# ============================================================================
 # Summary
 # ============================================================================
 

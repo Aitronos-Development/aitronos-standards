@@ -1,6 +1,6 @@
 ---
 name: pr-bugfix
-description: "Fix bugbot review comments from a GitHub PR. Waits for bugbot to finish, classifies bugs into auto-fixable vs human-review, fixes safe issues, tests, commits, pushes, resolves conversations, and loops until all threads are resolved (max 5 iterations). Use when a PR has bugbot or cursor-bot review comments that need fixing."
+description: "Fix bugbot review comments and CI failures from a GitHub PR. Waits for bugbot to finish, classifies bugs into auto-fixable vs human-review, fixes safe issues, checks all CI statuses (migrations, tests, lint, compliance), tests, commits, pushes, resolves conversations, and loops until all threads are resolved and CI passes (max 10 iterations). Use when a PR has bugbot comments or failing CI checks."
 disable-model-invocation: false
 user-invocable: true
 ---
@@ -21,14 +21,16 @@ Automatically fetch bugbot review comments from a GitHub PR, classify them, fix 
 ## What This Does
 
 1. **Parses the PR URL and waits for bugbot** — blocks until the Cursor Bugbot check run is `completed`
-2. **Fetches all unresolved review threads** and filters for bugbot comments
-3. **Classifies each bug** into auto-fixable or requires-human-review
-4. **Displays a bug table** with Bug, Category, and Disposition columns
-5. **Asks the user** to confirm the plan before proceeding
-6. **Auto-fixes safe bugs** — code style, unused imports, type hints, null checks, etc.
-7. **Escalates dangerous bugs** — business logic, architecture, data model changes go to the user
-8. **Tests, commits, pushes** and resolves fixed conversations
-9. **Loops** — waits for bugbot to re-run on pushed changes, re-fetches threads, and repeats until zero unresolved threads remain (max 10 iterations)
+2. **Resolves merge conflicts** — merges the base branch and resolves any conflicts before fixing bugs
+3. **Fetches all unresolved review threads** and filters for bugbot comments
+4. **Classifies each bug** into auto-fixable or requires-human-review
+5. **Displays a bug table** with Bug, Category, and Disposition columns
+6. **Asks the user** to confirm the plan before proceeding
+7. **Auto-fixes safe bugs** — code style, unused imports, type hints, null checks, etc.
+8. **Escalates dangerous bugs** — business logic, architecture, data model changes go to the user
+9. **Tests, commits, pushes** and resolves fixed conversations
+10. **Checks all CI statuses** — migrations, tests, lint, compliance — and fixes failures
+11. **Loops** — waits for bugbot to re-run on pushed changes, re-fetches threads, and repeats until zero unresolved threads remain and all CI passes (max 10 iterations)
 
 ## Usage
 
@@ -80,6 +82,40 @@ OWNER="{owner}" && REPO="{repo}" && PR={pr_number} && MAX_WAIT=900 && ELAPSED=0 
 - Status is `not_found` on every poll → ask: "No Cursor Bugbot check run found. Proceed or abort?"
 
 **WARNING**: If you skip this wait and go straight to fetching threads, you WILL find 0 unresolved threads (because the bugbot hasn't posted them yet) and incorrectly conclude there is nothing to fix. This has happened before. Do not repeat it.
+
+### Step 1b: Resolve Merge Conflicts
+
+Check if the PR has merge conflicts with the base branch:
+
+```bash
+gh pr view {pr_number} --repo {owner}/{repo} --json mergeable --jq '.mergeable'
+```
+
+If the result is `"CONFLICTING"`:
+
+1. **Fetch and merge the base branch**:
+   ```bash
+   git fetch origin {baseRefName}
+   git merge origin/{baseRefName} --no-edit
+   ```
+
+2. **If merge conflicts exist**, resolve them:
+   - For each conflicting file, read the file and find conflict markers (`<<<<<<<`, `=======`, `>>>>>>>`)
+   - Analyze both sides of the conflict to understand the intent
+   - Prefer the more complete/recent version; if both add new code, keep both
+   - Remove all conflict markers
+   - Run the linter on each resolved file
+
+3. **Commit and push** the merge resolution:
+   ```bash
+   git add -A
+   git commit --no-verify -m "merge: resolve conflicts with {baseRefName}"
+   git push --no-verify origin HEAD:{headRefName}
+   ```
+
+4. **Wait for bugbot to re-run** on the new merge commit using the same polling command from Step 1. The bugbot must complete on the post-merge HEAD before proceeding.
+
+If the result is `"MERGEABLE"` or `"UNKNOWN"`, skip this step.
 
 ### Step 2: Create Worktree
 
@@ -330,8 +366,55 @@ After pushing, the bugbot re-triggers on the new HEAD. Run the **exact same bugb
 Once the bugbot re-run is confirmed complete:
 - Increment iteration
 - Go back to **Step 5** to re-fetch threads
-- If Step 4 finds zero unresolved threads → the PR is genuinely clean, exit to Step 10
+- If Step 4 finds zero unresolved threads → the PR is genuinely clean, proceed to Step 9b
 - If Step 4 finds new threads → the pushed fixes introduced new issues, continue fixing
+
+### Step 9b: Check All CI Statuses
+
+After all bugbot threads are resolved (or after each iteration's push), check **all** CI check statuses on the PR — not just bugbot:
+
+```bash
+gh pr checks {pr_number} --repo {owner}/{repo}
+```
+
+**If all checks pass** → proceed to Step 10 (Final Summary).
+
+**If any checks fail**, investigate each failing check:
+
+1. **Get the failure logs**:
+   ```bash
+   gh run view {run_id} --repo {owner}/{repo} --log-failed 2>&1 | tail -80
+   ```
+
+2. **Classify the failure**:
+
+   | Failure Type | Action |
+   |---|---|
+   | **test-migrations** — column/table already exists | Make migration idempotent (add `_col_exists`/`_table_exists` guards) |
+   | **test-migrations** — SQL syntax error | Fix the migration SQL |
+   | **test** — unit/integration test failure caused by this PR's changes | Fix the code or test |
+   | **test** — cancelled (dependency on another failing check) | Fix the root cause check first |
+   | **lint / compliance** — formatting or compliance violation | Run `{{config:commands.lint.fix}}` and `{{config:commands.compliance.fast}}` |
+   | **test** — pre-existing failure unrelated to PR | Note it and skip |
+
+3. **Fix, commit, and push** the CI fix:
+   ```bash
+   git add -A
+   git commit --no-verify -m "fix: resolve CI failures (iteration {iteration})"
+   git push --no-verify origin HEAD:{headRefName}
+   ```
+
+4. **Wait for CI to re-run** — poll all checks until they complete:
+   ```bash
+   gh pr checks {pr_number} --repo {owner}/{repo} --watch
+   ```
+   If `--watch` is not available, poll manually every 30 seconds using `gh pr checks`.
+
+5. **If fixes introduce new bugbot threads**, loop back to Step 4.
+
+6. **If CI still fails after fix attempt**, report the remaining failures to the user and ask whether to continue or abort.
+
+**This step is critical** — bugbot threads being resolved does NOT mean the PR is ready to merge. All CI checks must also pass.
 
 ### Step 10: Final Summary
 
@@ -344,14 +427,20 @@ Total resolved:   {total_resolved} threads
 Total skipped:    {total_skipped} threads (HUMAN-REVIEW, user skipped)
 Total failed:     {total_failed} threads
 Remaining:        {remaining} unresolved bugbot threads
+CI status:        {all_pass | N failing}
 
 {If remaining > 0 and iteration >= max_iterations:
   "Max iterations reached. {remaining} threads still unresolved.
    Re-run /pr-bugfix to continue, or address remaining items manually."}
 
-{If remaining == 0:
-  "All bugbot threads resolved. Bugbot re-ran after final push and found
-   no new issues. PR is clean."}
+{If remaining == 0 and CI all pass:
+  "All bugbot threads resolved and all CI checks pass.
+   PR is clean and ready to merge."}
+
+{If remaining == 0 and CI has failures:
+  "All bugbot threads resolved but {N} CI checks still failing:
+   - {check_name}: {failure reason}
+   Address remaining CI failures manually or re-run /pr-bugfix."}
 
 Commits pushed:   {N} commits to branch {headRefName}
 ```

@@ -209,6 +209,30 @@ conventions:
   response: "envelope"
 
 
+# -----------------------------------------------------------------------------
+# Compliance
+# -----------------------------------------------------------------------------
+# Configuration for compliance validators. Used by vendor term enforcement
+# and other compliance checks.
+
+compliance:
+  vendor_terms:
+    # Additional vendor terms specific to this project (beyond the standard list)
+    extra_terms: []
+
+    # Directories/files to scan for vendor terms in public docs
+    public_doc_paths: ["docs/public-docs/docs"]
+
+    # Directories to scan for vendor term exposure in API-facing code
+    api_code_paths: ["app/api"]
+
+    # Directories excluded from code scanning (e.g., internal admin endpoints)
+    excluded_dirs: ["app/api/v1/routes/admin"]
+
+    # Files/patterns to skip in doc scanning (e.g., auto-generated files)
+    excluded_files: ["redoc-static.html"]
+
+
 # =============================================================================
 # ALTERNATIVE: Vue/TypeScript Frontend Configuration
 # =============================================================================

@@ -46,6 +46,14 @@ The answer is NO (you can do it yourself) only if:
 - You use **skills** (`/qa`, `/tech-review`, `/compliance-fix`, etc.) to trigger verification workflows
 - You **NEVER commit or push** to git unless the user explicitly asks you to
 
+## Phase Completion — MANDATORY
+
+**Every time a phase passes QA, IMMEDIATELY rename its folder to add `-done` suffix:**
+```
+phases/phase-1-vexa-integration/  →  phases/phase-1-vexa-integration-done/
+```
+Use `mv` via Bash. Then update `ROADMAP.md`. Do this after EVERY phase — never wait until all phases are done.
+
 ## What You NEVER Do
 
 - Write or edit application code — no files in `{{config:paths.source}}`, `{{config:paths.tests}}`, `{{config:paths.migrations}}`
@@ -53,6 +61,7 @@ The answer is NO (you can do it yourself) only if:
 - Run HTTP calls to test endpoints yourself — developers test their own work (except in live mode for quick verification)
 - Skip verification — quality gates are mandatory
 - Proceed past a checkpoint without user approval
+- Forget to rename completed phase folders with `-done` suffix
 
 ## What You CAN Do
 

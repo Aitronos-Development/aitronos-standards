@@ -167,6 +167,18 @@ When the user invokes `/orchestrate`, determine which mode based on what they sa
 
 If unclear, ask the user which mode they want.
 
+### Planning Before Execution — Mandatory Gate
+
+**Execution (Mode 2) MUST NOT start or be proposed until ALL planning is complete and NO open decisions remain.**
+
+Before proposing execution:
+1. **All phases are fully specced** — every subphase has file paths, schemas, method signatures, and stop conditions
+2. **All decisions are resolved** — `notes/decisions.md` has no pending items, no "TBD", no "to be decided"
+3. **All open questions are answered** — the user has been asked every ambiguous point and responded
+4. **No concerns are marked Critical** — `notes/concerns.md` has no unresolved Critical items
+
+If a user says "let's build it" but the spec has open questions, **ask the questions first** — do not start executing with assumptions. The cost of a 2-minute question is always lower than the cost of rework from a wrong assumption.
+
 ---
 
 <workflow>
@@ -244,6 +256,7 @@ The `/tech-spec` skill has the detailed template and conventions for specs. You 
    - Identify dependencies between subphases
    - **Identify checkpoint gates** — which subphases require human verification before continuing?
    - Check `notes/concerns.md` for open risks related to this phase
+   - **Housekeeping: scan all phase folders** — list the phase directories with `ls`, then check `ROADMAP.md`. If any phases are marked "Done" in the ROADMAP but their folder is missing the `-done` suffix, rename them with `mv` via Bash immediately before proceeding. This catches drift from prior sessions.
 
 2. **Design the team** — Decide how many developers and what each one does:
 
@@ -303,8 +316,18 @@ The `/tech-spec` skill has the detailed template and conventions for specs. You 
 
    Both agents produce a pass/fail report. Collect both before proceeding:
    - **If either finds P0/P1 bugs** -> create fix tasks for developers, re-run QA after fixes
-   - **If both pass** -> proceed to next phase or final QA
+   - **If both pass** -> **immediately mark the phase as done** (next paragraph), then proceed to next phase or final QA
    - **Do NOT skip QA** — "tests pass" is not enough. Real API verification catches integration bugs that unit tests miss.
+
+   **Mark phase as done (MANDATORY — do this NOW, before moving on):**
+   - **Rename the phase folder** to add `-done` suffix using `mv` via Bash:
+     ```bash
+     mv docs/.specs/{project}/phases/phase-N-{name} docs/.specs/{project}/phases/phase-N-{name}-done
+     ```
+   - **Update `ROADMAP.md`** — mark the phase row as "Done"
+   - Resolve any concerns in `notes/concerns.md` that were addressed by this phase
+   - Log any new decisions in `notes/decisions.md`
+   - **Do NOT proceed to the next phase until the rename is confirmed.** If `mv` fails, diagnose and fix before continuing.
 
 8. **QA — Final Integration Testing (MANDATORY)** — After ALL phases are complete, spawn **two final QA agents in parallel**:
 
@@ -321,21 +344,10 @@ The `/tech-spec` skill has the detailed template and conventions for specs. You 
 
    **This is the final gate before presenting results to the user.**
 
-9. **Mark phase as done** — After successful QA for each phase:
-   - **Rename the phase folder** to add `-done` suffix:
-     ```
-     phases/phase-1-vexa-integration/  →  phases/phase-1-vexa-integration-done/
-     ```
-     Use `mv` via Bash to rename. This makes it visually obvious in the file tree which phases are complete.
-   - Update `ROADMAP.md` — mark phase as done, update progress
-   - Resolve any concerns in `notes/concerns.md` that were addressed
-   - Log any new decisions in `notes/decisions.md`
-   - **Do this IMMEDIATELY after each phase passes QA** — don't wait until all phases are done
+9. **Report to user** — Present summary: what was built, QA results (per-phase + final), any remaining issues.
 
-10. **Report to user** — Present summary: what was built, QA results (per-phase + final), any remaining issues.
-
-11. **Ship** — On approval:
-    - Verify all completed phase folders have `-done` suffix
+10. **Ship** — On approval:
+    - **Verify all completed phase folders have `-done` suffix** — if any are missing, rename them now
     - Shut down developers and QA agents (`SendMessage type="shutdown_request"`)
     - Clean up team (`TeamDelete`)
 
@@ -351,12 +363,19 @@ Bugs can arrive in different forms — treat them all the same:
 - **Pasted bug reports** — text the user pastes directly into the chat
 - **Console logs** — frontend/backend error output the user shares
 - **Verbal descriptions** — user describes the issue conversationally
+- **Compliance audit tracking documents** — `compliance_reports/audits/{domain}-audit.md` with checkboxed findings
 
 No matter the source, the workflow is the same.
 
 ### Steps
 
 1. **Parse the work items** — Extract individual tasks from what the user described.
+
+   **If a compliance audit tracking document exists** (`compliance_reports/audits/{domain}-audit.md`):
+   - Read the document — it is the **single source of truth** for what needs fixing
+   - Extract all unchecked findings (`- [ ]`) as work items
+   - Respect the finding IDs (C1, H1, M1, etc.) — use them in task names
+   - Work severity-first: all Critical before High, all High before Medium, etc.
 
 2. **Minimal triage** — Do only enough research to understand which files/areas are involved. Use a quick `Grep` or `Glob` — NOT deep file reads. The goal is to write a good task description, not to understand the full implementation. If you need deeper context, use an Explore agent so it doesn't fill your context window.
 
@@ -380,13 +399,40 @@ No matter the source, the workflow is the same.
 
 6. **Monitor** — Wait for developers to complete. Check `TaskList`. Handle questions.
 
-7. **Report** — When all done, summarize results to user. Offer to commit and push if requested.
+7. **Verify and update tracking document** — After ALL developers complete:
+   a. **Run the full test suite** for the domain — every test must pass
+   b. **Spot-check each fix** — for each completed finding, do a quick `Grep` or `Read` to confirm the fix is actually in the code (not just reported as done)
+   c. **Run compliance checks** — `{{config:commands.compliance}}` or domain-specific checks
+   d. **Update the tracking document** (`compliance_reports/audits/{domain}-audit.md`):
+      - Check off each verified finding: `- [ ]` → `- [x]`
+      - Update the summary counts (Resolved column)
+      - Update section statuses (✅/⚠️/❌)
+      - Append a row to the Fix Log with date, finding IDs, and verification status
+   e. **If any fix failed verification** — do NOT check it off. Instead:
+      - Spawn a new developer to re-fix it
+      - After the re-fix, verify again
+      - Only check it off when truly verified
+   f. **Repeat until every finding is checked off** — the orchestrator does NOT stop until the tracking document shows all findings resolved
+
+8. **Final verification sweep** — After all findings are checked off:
+   a. Run the **full test suite** one more time (not just domain tests — the entire suite)
+   b. Run **compliance checks** one more time
+   c. Do a **final read of the tracking document** — confirm every box is checked
+   d. If anything regressed, go back to step 7e
+
+9. **Report** — Present to the user:
+   - The tracking document path
+   - Summary: X/X findings resolved
+   - Test results: all passing
+   - Compliance status
+   - Any findings that required multiple attempts
 
 ### Key difference from Execute mode
-- No spec document — the task description IS the spec
+- No spec document — the task description IS the spec (or the audit tracking document)
 - No formal review — verification is part of each task
 - Faster — research -> assign -> done
 - **Test-first for bugs** — every bug fix includes a regression test
+- **Tracking document is the contract** — nothing is done until every checkbox is checked and verified
 
 ---
 
@@ -500,11 +546,13 @@ You:  "Type detection added. Detail endpoint now returns the type field. Tests p
 - Tell developers WHERE to look, not WHAT the code says — they read files themselves
 - Verify developer output — run tests, check files exist, spot-check implementations
 - Stop at checkpoint gates and present the checkpoint report
+- **Rename phase folders with `-done` suffix immediately after per-phase QA passes** — this is part of step 7, not a separate step
 - Update `ROADMAP.md` after phase completion
 - Log concerns in `notes/concerns.md` when something goes wrong
 - Shut down developers gracefully after completion
 - Report results to the user
 - Protect your context window — delegate research to Explore agents or developers
+- **Update the audit tracking document** — if `compliance_reports/audits/{domain}-audit.md` exists, check off findings as they are verified, update counts, and append to the Fix Log. The tracking document is the contract — work is not done until every box is checked.
 
 ### AUTONOMY MODE
 When the user says "just run it" or grants autonomy:
@@ -522,6 +570,7 @@ When the user says "just run it" or grants autonomy:
 | `/tech-spec` | Detailed spec creation (Mode 1 can invoke this) |
 | `/tech-review` | Formal pass/fail review against spec (Mode 2 can invoke this) |
 | `/qa` | Comprehensive testing — unit, API, compliance, security, edge cases |
+| `/compliance-audit` | Full domain audit — produces tracking document that Mode 3 consumes |
 
 ## Key Directories
 

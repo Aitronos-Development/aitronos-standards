@@ -25,6 +25,7 @@ Rules are engineering standards loaded automatically from `.claude/rules/`. Each
 | `self-testable-code.md` | All code must be self-tested before shipping |
 | `start-dev.md` | Every project must have a `start-dev.sh` — zero to running in one command |
 | `task-reference-comments.md` | No "Task X.Y:" comments — use TODO/FIXME or proper comments |
+| `vendor-terms.md` | Never expose third-party vendor names in public docs, API specs, or API-facing code |
 
 ### Skills
 
@@ -232,6 +233,7 @@ aitronos-standards/
     orchestrator.md             # Team lead agent definition
   guides/
     start-dev-reference.md        # Full start-dev.sh implementation guide with skeleton
+    vendor-terms-validators.md    # Two-layer vendor term enforcement setup guide
   rules/
     branch-naming.md
     code-organization.md
@@ -244,6 +246,7 @@ aitronos-standards/
     self-testable-code.md
     start-dev.md
     task-reference-comments.md
+    vendor-terms.md
   skills/
     compliance-fix/SKILL.md
     orchestrate/SKILL.md

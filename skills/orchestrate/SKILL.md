@@ -344,9 +344,33 @@ The `/tech-spec` skill has the detailed template and conventions for specs. You 
 
    **This is the final gate before presenting results to the user.**
 
-9. **Report to user** — Present summary: what was built, QA results (per-phase + final), any remaining issues.
+9. **PRE-REPORT GATE (MANDATORY — STOP HERE BEFORE REPORTING)**
 
-10. **Ship** — On approval:
+   **You MUST NOT report to the user or declare work complete until EVERY item below is verified. This is a hard gate. No exceptions, no shortcuts, no "I'll do it later". Check each one NOW.**
+
+   ```
+   PRE-REPORT CHECKLIST — verify each item before proceeding:
+
+   □ QA Agent A was spawned AND returned a pass report (unit tests + compliance)
+   □ QA Agent B was spawned AND returned a pass report (real API calls)
+   □ If either QA agent found bugs → fix tasks were created, fixes verified, QA re-run
+   □ Phase folder renamed to -done suffix (mv confirmed, not just planned)
+   □ ROADMAP.md updated with phase marked "Done"
+   □ All concerns in notes/concerns.md reviewed — resolved ones marked
+   □ Any new decisions logged in notes/decisions.md
+   □ All developer agents shut down (SendMessage shutdown_request)
+   □ Team cleaned up (TeamDelete) or ready for next phase
+
+   If ANY box is unchecked → GO BACK and complete it before reporting.
+   "Tests pass" alone does NOT clear this gate.
+   "Developers report success" alone does NOT clear this gate.
+   ```
+
+   **Why this exists:** Skipping QA and folder cleanup has happened before. The cost of a broken feature shipped to the user is far higher than the cost of running QA agents. This checklist exists because the orchestrator has a proven tendency to skip from "developers done" to "report to user" without the mandatory verification steps.
+
+10. **Report to user** — Present summary: what was built, QA results (per-phase + final), any remaining issues. **Include the filled-in checklist** so the user can see verification was done.
+
+11. **Ship** — On approval:
     - **Verify all completed phase folders have `-done` suffix** — if any are missing, rename them now
     - Shut down developers and QA agents (`SendMessage type="shutdown_request"`)
     - Clean up team (`TeamDelete`)
@@ -559,6 +583,9 @@ When the user says "just run it" or grants autonomy:
 - Skip team plan approval — design and spawn directly
 - Skip implementation checkpoints — go straight to verification
 - **Still stop at security/migration/auth checkpoints** — these are never skippable
+- **Still spawn QA agents** — QA is NEVER skippable, even in autonomy mode
+- **Still complete the PRE-REPORT CHECKLIST** — the gate in Step 9 applies regardless of autonomy
+- **Still rename phase folders to -done** — housekeeping is mandatory
 - Still verify quality — non-negotiable
 - Report a summary after completion
 - Stop and ask if verification fails twice

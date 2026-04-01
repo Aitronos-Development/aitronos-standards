@@ -147,7 +147,7 @@ This stages everything including updated submodule pointers.
 **Before attempting the commit**, proactively run compliance checks and fix everything:
 
 ```bash
-{{config:commands.compliance.fast}}
+nice -n 10 {{config:commands.compliance.fast}}
 ```
 
 If no compliance command is configured, skip to Step 8.
@@ -177,7 +177,7 @@ If no compliance command is configured, skip to Step 8.
 After fixing, re-run compliance:
 
 ```bash
-{{config:commands.compliance.fast}}
+nice -n 10 {{config:commands.compliance.fast}}
 ```
 
 **Repeat this fix loop until compliance reports 0 critical errors.** Maximum 5 iterations. If after 5 iterations there are still errors, list every remaining error and ask the user — but do NOT use `--no-verify`.

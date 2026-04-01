@@ -72,7 +72,7 @@ Run the existing test suite to catch regressions:
 
 ```bash
 # Full suite (fast tests only)
-{{config:commands.test.unit}}
+nice -n 10 {{config:commands.test.unit}}
 
 # Scoped to specific area (adjust path to match the area under test)
 # Run tests for the specific service or route being tested
@@ -235,7 +235,7 @@ Verify each layer exists and follows the project's conventions as defined in `pr
 
 ```bash
 # Run the project's compliance suite
-{{config:commands.compliance}}
+nice -n 10 {{config:commands.compliance}}
 ```
 
 **Checklist:**

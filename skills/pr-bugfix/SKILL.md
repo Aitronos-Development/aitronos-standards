@@ -246,12 +246,12 @@ For each bug:
 
 3. **Run the linter/formatter** immediately:
    ```bash
-   {{config:commands.lint.fix}}
+   nice -n 10 {{config:commands.lint.fix}}
    ```
 
 4. **Run targeted tests** for the affected area:
    ```bash
-   {{config:commands.test.unit}} -k "test_{affected_module}"
+   nice -n 10 {{config:commands.test.unit}} -k "test_{affected_module}"
    ```
 
 5. **If tests fail** because of the fix, revise it. If the failure is pre-existing, note it and continue. Never leave a fix that breaks existing tests.
@@ -288,17 +288,17 @@ After all fixes for this iteration are applied:
 
 1. **Full test suite**:
    ```bash
-   {{config:commands.test.unit}}
+   nice -n 10 {{config:commands.test.unit}}
    ```
 
 2. **Compliance checks** (if configured):
    ```bash
-   {{config:commands.compliance.fast}}
+   nice -n 10 {{config:commands.compliance.fast}}
    ```
 
 3. **Lint check**:
    ```bash
-   {{config:commands.lint.check}}
+   nice -n 10 {{config:commands.lint.check}}
    ```
 
 If any failures, identify which fix caused it, revise, and re-verify.
@@ -394,7 +394,7 @@ gh pr checks {pr_number} --repo {owner}/{repo}
    | **test-migrations** — SQL syntax error | Fix the migration SQL |
    | **test** — unit/integration test failure caused by this PR's changes | Fix the code or test |
    | **test** — cancelled (dependency on another failing check) | Fix the root cause check first |
-   | **lint / compliance** — formatting or compliance violation | Run `{{config:commands.lint.fix}}` and `{{config:commands.compliance.fast}}` |
+   | **lint / compliance** — formatting or compliance violation | Run `nice -n 10 {{config:commands.lint.fix}}` and `nice -n 10 {{config:commands.compliance.fast}}` |
    | **test** — pre-existing failure unrelated to PR | Note it and skip |
 
 3. **Fix, commit, and push** the CI fix:

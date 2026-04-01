@@ -58,7 +58,7 @@ Or with options:
 Use the Bash tool to run all tests:
 
 ```bash
-{{config:commands.test.all}} --tb=short -v -q
+nice -n 10 {{config:commands.test.all}} --tb=short -v -q
 ```
 
 Capture the output and analyze failure patterns.
@@ -84,17 +84,17 @@ Apply fixes in this order:
 
 1. **Format code**:
    ```bash
-   {{config:commands.lint.format}}
+   nice -n 10 {{config:commands.lint.format}}
    ```
 
 2. **Fix imports**:
    ```bash
-   {{config:commands.lint.sort_imports}}
+   nice -n 10 {{config:commands.lint.sort_imports}}
    ```
 
 3. **Fix linting issues**:
    ```bash
-   {{config:commands.lint.fix}}
+   nice -n 10 {{config:commands.lint.fix}}
    ```
 
 ### Step 4: Suggest Manual Fixes
@@ -121,7 +121,7 @@ For issues that can't be auto-fixed, provide specific suggestions:
 After applying fixes:
 
 ```bash
-{{config:commands.test.all}} --lf --tb=short -v
+nice -n 10 {{config:commands.test.all}} --lf --tb=short -v
 ```
 
 Report results to user with:

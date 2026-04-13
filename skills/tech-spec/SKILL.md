@@ -223,20 +223,41 @@ For each phase, create a directory with subphase files directly under `phases/`:
 
 ```
 {{config:paths.specs}}/{project}/phases/phase-N-{name}/
-├── README.md           — Overview, strategy, rollback plan, sizing, success criteria
-├── N.1-{name}.md       — First subphase (usually database schema)
-├── N.2-{name}.md       — Second subphase (usually repository/service)
-├── N.3-{name}.md       — Third subphase (usually endpoints)
+├── README.md           — Overview and index ONLY (no implementation details)
+├── N.1-{name}.md       — Self-contained subphase spec
+├── N.2-{name}.md       — Self-contained subphase spec
 ├── ...
 └── N.X-tests.md        — Final subphase (ALWAYS tests & real API verification)
 ```
 
+### CRITICAL: File Structure Rules
+
+**The README is an overview and index — NOT an implementation spec.**
+
+The README contains ONLY:
+- Goal, dependencies, strategy, architecture diagram
+- Risk assessment, rollback plan, sizing estimate
+- Subphase index table (name, file, dependencies, risk, owner)
+- Checkpoint gates and success criteria
+
+The README MUST NOT contain:
+- Endpoint specifications, schemas, or code examples
+- Step-by-step implementation instructions
+- Data shapes, business logic rules, or error codes
+- File paths to create/modify (beyond the high-level "existing state" table)
+
+**Maximum README size: ~150 lines.** If it's longer, move content to subphase files.
+
+**Each subphase file is fully self-contained.** A developer reading ONLY their assigned subphase file must have everything they need to implement it. No "see README", no "refer to subphase N.1", no cross-references to other subphase files.
+
+**Duplicate shared context across subphase files.** If subphases N.2 and N.3 both need to know the Issue schema, include the full schema in BOTH files. Duplication across subphase files is explicitly preferred over cross-references. This enables parallel developer assignment — each developer reads one file and has full context.
+
 ### README.md Template
 
-Every phase README MUST include all of the following sections:
+Every phase README MUST include all of the following sections. **Keep it concise — this is an index, not an implementation doc.**
 
 ```markdown
-# Phase N — {Name} (Technical Execution)
+# Phase N — {Name}
 
 ## Goal
 
@@ -245,100 +266,68 @@ Every phase README MUST include all of the following sections:
 ## Dependencies
 
 - Phase X ({name}) — {what we need from it}
-- Phase Y ({name}) — {what we need from it}
 
 ## Existing Codebase State
 
 | Component | Status | File Path |
 |-----------|--------|-----------|
 | {Model} | [EXISTS] | `{{config:paths.models}}/{file}` |
-| {Repository} | [MISSING] | `{{config:paths.repositories}}/{file}` |
 | {Service} | [MISSING] | `{{config:paths.services}}/{domain}/{file}` |
-| {Route} | [MISSING] | `{{config:paths.routes}}/{file}` |
-| {Schema} | [MISSING] | `{{config:paths.schemas}}/{file}` |
-
-## Architectural Decisions
-
-| ID | Decision | Rationale |
-|----|----------|-----------|
-| D-{N} | {What was decided} | {Why} |
-
-(Also logged in `notes/decisions.md`)
 
 ## Strategy
 
-{2-3 paragraphs describing the overall approach:}
-- How does this integrate with existing code?
-- What's the build order and why?
-- What are the risky parts and how do we mitigate them?
+{2-3 paragraphs: overall approach, integration points, build order, risky parts.}
 
 ## Rollback Plan
 
-If this phase needs to be reverted after partial or full deployment:
+1. **Database**: {How to reverse migrations}
+2. **Code**: {Which files to revert}
+3. **Data**: {Cleanup needed?}
 
-1. **Database**: {How to reverse migrations. Are migrations reversible? Any data migration concerns?}
-2. **Code**: {Which files to revert. Any shared code that other phases now depend on?}
-3. **Data**: {Any data created during this phase that needs cleanup? Orphaned records?}
-4. **Dependencies**: {Will reverting this break other phases that were built on top of it?}
-
-**Point of no return**: {Describe any step after which rollback becomes difficult or impossible.}
+**Point of no return**: {When rollback becomes difficult}
 
 ## Risk Assessment
 
 | Risk | Severity | Mitigation |
 |------|----------|------------|
-| {What could go wrong} | High / Medium / Low | {How to prevent or handle it} |
+| {Risk} | High/Medium/Low | {Mitigation} |
 
 ## Sizing Estimate
 
-- **New files**: ~{N} files
-- **Modified files**: ~{N} files
-- **Estimated new code**: ~{N} lines
-- **New DB tables**: {N} ({names})
-- **New endpoints**: {N}
-- **Team size recommendation**: {1-3 developers}
+- **New files**: ~{N} | **Modified files**: ~{N} | **New code**: ~{N} lines
+- **Team size**: {1-3 developers}
 
 ## Subphases
 
-| # | Name | Dependencies | Risk | Est. Lines |
-|---|------|-------------|------|------------|
-| N.1 | Database Schema | None | Low | ~150 |
-| N.2 | Repository & Service | N.1 | Medium | ~400 |
-| N.3 | Endpoints | N.2 | Low | ~300 |
-| N.X | Tests & Verification | N.3 | Low | ~500 |
+| # | Name | File | Dependencies | Checkpoint | Owner |
+|---|------|------|-------------|------------|-------|
+| N.1 | Database Schema | `N.1-database.md` | None | — | — |
+| N.2 | Service Layer | `N.2-services.md` | N.1 | — | — |
+| N.3 | Endpoints | `N.3-endpoints.md` | N.2 | CHECKPOINT | — |
+| N.X | Tests | `N.X-tests.md` | N.3 | — | — |
 
-## Endpoint Summary
+## Checkpoint Gates
 
-| Method | Path | Status | Auth |
-|--------|------|--------|------|
-| GET | `/v1/organizations/{org_id}/...` | NEW | Per project conventions |
-| POST | `/v1/organizations/{org_id}/...` | NEW | Per project conventions |
-
-## Database Tables
-
-{Full table definitions with column types, constraints, indexes}
-
-## Key Business Rules
-
-{Numbered list of critical business logic}
-
-## Authorization
-
-{Who can do what — capabilities, ownership rules, defaults}
+### After N.3 — CHECKPOINT
+Before proceeding to N.4, verify:
+- [ ] {Criterion}
+- [ ] {Criterion}
 
 ## Success Criteria
 
-- [ ] {Specific, testable criterion}
-- [ ] {Another criterion}
 - [ ] All unit tests pass
-- [ ] All integration tests pass
 - [ ] Real API verification confirms all endpoints work
 - [ ] Compliance checks pass
-- [ ] Public API documentation created for all endpoints (if applicable)
-- [ ] ROADMAP.md updated with phase status
+- [ ] ROADMAP.md updated
 ```
 
+**Note: No endpoint specs, schemas, code examples, or business logic in the README. All of that goes in the subphase files.**
+
 ### Subphase Document Template
+
+**Every subphase document is FULLY SELF-CONTAINED.** A developer assigned to this subphase reads ONLY this file and has everything they need. No cross-references to other subphase files or the README.
+
+If this subphase depends on entities created in a prior subphase (e.g. a database table), **include the full schema/type definition inline** so the developer doesn't need to open the other file. Duplication across subphase files is explicitly preferred over cross-references.
 
 Every subphase document MUST include all of the following sections:
 
@@ -347,11 +336,21 @@ Every subphase document MUST include all of the following sections:
 
 ## Goal
 
-{One sentence.}
+{One sentence: what this subphase delivers.}
+
+## Context
+
+{2-3 paragraphs giving the developer full background:}
+- What is the broader feature? What problem does it solve?
+- What exists already in the codebase that's relevant?
+- How does this subphase fit into the larger phase?
+- What did prior subphases create that this one depends on?
+
+**Include the actual schemas/types/shapes from dependencies inline here.** For example, if subphase N.1 created a database table and this subphase builds the service layer for it, paste the full table definition here so the developer has it.
 
 ## Dependencies
 
-- {N.Y} — {what we need from it}
+- {N.Y} — {what it created that we depend on}
 
 ## Risk Level
 
@@ -388,7 +387,9 @@ CREATE TABLE {name} (
 CREATE INDEX idx_{name}_{field} ON {name} ({field});
 ```
 
-## Schemas
+## Schemas / Types
+
+{Include ALL relevant schemas — both the ones this subphase creates AND the ones it consumes from other subphases. The developer must see every data shape they'll work with.}
 
 ```python
 class {Name}Create(BaseModel):
@@ -523,6 +524,13 @@ Add new error codes per project conventions (see `project.config.yaml` for error
 - Revert files: {list}
 - Migration: run `{{config:commands.migrations.downgrade}}` to target revision
 - Data cleanup: {any orphaned data?}
+
+## Verification
+
+{How the developer confirms this subphase works:}
+- Tests to run
+- API calls to make
+- Expected results
 
 ## Public API Documentation
 
@@ -805,17 +813,21 @@ Every project under `{{config:paths.specs}}/{project}/` follows this layout:
 │   └── {topic}.md                 — API research, frontend contracts, etc.
 └── phases/                        — Phase specs (YOUR output)
     ├── phase-1-{name}/
-    │   ├── README.md              — Phase overview, strategy, rollback, sizing
-    │   ├── 1.1-{name}.md          — Subphase spec
+    │   ├── README.md              — Overview + index ONLY (~150 lines max)
+    │   ├── 1.1-{name}.md          — Self-contained subphase spec
+    │   ├── 1.2-{name}.md          — Self-contained subphase spec
     │   └── ...
     ├── phase-2-{name}/
     │   ├── README.md
     │   └── ...
-    └── phase-N-{name}-done.md     — Completed phases get renamed with -done suffix
+    └── phase-N-{name}-done/       — Completed phases get -done suffix on folder
 ```
 
 **Rules:**
 - NO `technical-execution/` folder — phases go directly under `phases/`
 - `overview.md` and `ROADMAP.md` live at the project root (not buried in subfolders)
 - Decisions and concerns go in `notes/` (reference material, not primary docs)
-- Completed phase folders get a `-done` suffix on the README or folder name
+- Completed phase folders get a `-done` suffix on the folder name
+- **README.md is an overview and index ONLY** — no implementation details, no schemas, no code. Max ~150 lines.
+- **Each subphase file is fully self-contained** — a developer reads ONLY their file to implement. No cross-references to other subphase files.
+- **Duplicate shared context** across subphase files — if two subphases need the same type definition, include it in both. Cross-references are forbidden.

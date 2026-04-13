@@ -1,8 +1,13 @@
 ---
 name: orchestrate
-description: "Team lead orchestrator — manages sub-developers, never writes code. Four modes: (1) spec — research and create technical specifications, (2) execute — implement an existing spec with developer agents, (3) tasks — take a list of bugs/tasks and assign developers immediately, (4) live — real-time conversational development where requirements evolve."
+description: "Team lead orchestrator — manages sub-developers, never writes code."
 disable-model-invocation: false
 user-invocable: true
+subcommands:
+  spec: "Research and create technical specifications"
+  execute: "Implement an existing spec with developer agents"
+  tasks: "Take a list of bugs/tasks and assign developers immediately"
+  live: "Real-time conversational development"
 ---
 
 ## Project Configuration
@@ -91,10 +96,29 @@ The single source of truth for where we are. Update after every phase starts, co
 ### phases/ — Phase Specs
 
 ```
-{{config:paths.specs}}/{project}/phases/phase-N-{name}/   — Phase spec with subphase docs
+{{config:paths.specs}}/{project}/phases/phase-N-{name}/
+├── README.md              — Phase overview ONLY (goal, strategy, risks, subphase index)
+├── N.1-{name}.md          — Self-contained subphase spec
+├── N.2-{name}.md          — Self-contained subphase spec
+└── ...
 ```
 
 No `technical-execution/` folder. Phases go directly under `phases/`.
+
+**CRITICAL: Subphase file structure rules:**
+- The **README.md** is an **overview and index only** — it MUST NOT contain subphase implementation details. No endpoint specs, no schemas, no code examples, no step-by-step instructions. It contains: goal, strategy, architecture diagram, risk assessment, sizing estimate, subphase index table, checkpoint gates, and success criteria.
+- Each **subphase file** (`N.X-{name}.md`) is **fully self-contained** — a developer reading ONLY that file must have everything they need to implement it. No "see the README for details" or "refer to subphase N.1". Every subphase file must include:
+  - Full context (what exists, what's being built, why)
+  - All relevant schemas, types, and data shapes (inline, not by reference)
+  - All endpoint specs with request/response examples
+  - All business logic rules
+  - All file paths to create and modify
+  - All error codes and edge cases
+  - Stop conditions and verification steps
+  - Rollback instructions for that subphase
+- If two subphases share context (e.g. both need to know a data shape), **duplicate it** in both files. Duplication across subphase files is explicitly preferred over cross-references. A developer should never need to open another subphase file to understand their own.
+- Maximum README.md size: ~150 lines. If it's longer, content belongs in subphase files.
+- Maximum subphase file size: no limit — be as thorough as needed. A 500-line subphase file with full context is better than a 50-line file that says "see README".
 
 ## Human Checkpoints
 
@@ -215,12 +239,12 @@ If a user says "let's build it" but the spec has open questions, **ask the quest
    - Notes capture facts, not plans
 
 5. **Write the specification** — Use the `/tech-spec` skill or follow its template directly. Create documents in `{{config:paths.specs}}/{project}/phases/`:
-   - Phase README with: goal, strategy, rollback plan, risk assessment, sizing estimate, checkpoint gates
-   - Subphase docs with: exact file paths, schemas, method signatures, business logic, error codes, stop conditions
-   - Test subphase with: unit tests (exact function names), integration tests, real API verification (exact curl commands + expected responses), compliance checks
+   - **Phase README** (overview only, ~150 lines max): goal, strategy, architecture, rollback plan, risk assessment, sizing estimate, subphase index table, checkpoint gates, success criteria. **NO implementation details** — no schemas, no endpoints, no code.
+   - **Subphase files** (one per subphase, fully self-contained): Each file must contain ALL context a developer needs — file paths, schemas, method signatures, business logic, error codes, stop conditions, data shapes, verification steps. A developer reading ONLY their subphase file must be able to implement it without opening any other file.
+   - **Test subphase file**: unit tests (exact function names), integration tests, real API verification (exact curl commands + expected responses), compliance checks
    - Mark existing components with `[EXISTS]`
    - Mark checkpoint gates with `CHECKPOINT`
-   - Include enough detail that a developer with zero context can implement it
+   - **Duplicate shared context across subphase files** — cross-references between subphase files are forbidden. If two subphases need the same data shape, include it in both files.
 
 6. **Update tracking files**:
    - Update `ROADMAP.md` with the new phase
@@ -279,12 +303,12 @@ The `/tech-spec` skill has the detailed template and conventions for specs. You 
    - Wait for approval (unless autonomy granted)
 
 4. **Create team and tasks** — `TeamCreate` -> `TaskCreate` for each work item -> Spawn developers with prompts that:
-   - Reference the spec file path so the developer reads it themselves
+   - Reference the **specific subphase file** (e.g. `phases/phase-5-auth/5.2-service-layer.md`), NOT the README. Each subphase file is self-contained — the developer reads ONLY that file to get full context.
    - Point to key codebase conventions (reference the project's rules)
-   - List the file paths to read and implement
    - Include stop conditions from the spec
-   - **Do NOT paste spec content into the prompt** — tell the developer where to read it
-   - **Prompt max: 200 lines** — keep it lean, developers gather their own context
+   - **Do NOT paste spec content into the prompt** — tell the developer to read their subphase file
+   - **Do NOT tell developers to read the README** — the subphase file already contains all needed context
+   - **Prompt max: 200 lines** — keep it lean, developers gather their own context from their subphase file
 
 5. **Monitor** — Messages arrive automatically. Use `TaskList` to check progress. Redirect developers if off-track. Resolve blockers.
 

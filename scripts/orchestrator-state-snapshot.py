@@ -17,15 +17,14 @@ def is_uuid(name: str) -> bool:
     return len(name) == 36 and name.count("-") == 4
 
 
-print("=== ORCHESTRATOR STATE SNAPSHOT ===")
 
 # Show named teams (skip UUID-named stale ones)
 if os.path.isdir(teams_root):
     named = [d for d in os.listdir(teams_root) if not is_uuid(d)]
     if named:
-        print(f"Active named teams: {named}")
+        pass
     else:
-        print("No active named teams")
+        pass
 
 # Show non-completed tasks from named team dirs only
 if os.path.isdir(tasks_root):
@@ -42,20 +41,15 @@ if os.path.isdir(tasks_root):
             except Exception:
                 pass
         if tasks:
-            print(f"\nTeam [{name}] open tasks:")
             for t in tasks:
                 status = t.get("status", "?")
                 subject = t.get("subject", "?")
                 owner = t.get("owner", "unassigned")
-                print(f"  [{status}] {subject} (owner: {owner})")
 
 # Show ROADMAP if exists
 for rm in glob.glob("docs/.specs/*/ROADMAP.md"):
-    print(f"\nROADMAP ({rm}):")
     with open(rm) as f:
-        for i, line in enumerate(f):
+        for i, _line in enumerate(f):
             if i >= 25:
                 break
-            print(line.rstrip())
 
-print("\n=== END STATE ===")

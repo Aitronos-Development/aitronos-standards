@@ -559,11 +559,11 @@ echo ""
 
 echo -e "${BOLD}Step 9: Git Hooks (Branch Protection + Auto-Sync)${NC}"
 
+GIT_HOOKS_DIR="$(git rev-parse --git-dir)/hooks"
+
 if [ -x "$SUBMODULE_DIR/scripts/git/install-hooks.sh" ]; then
   "$SUBMODULE_DIR/scripts/git/install-hooks.sh"
 else
-  # Fallback: install post-merge hook directly
-  GIT_HOOKS_DIR="$(git rev-parse --git-dir)/hooks"
   POST_MERGE_HOOK="$GIT_HOOKS_DIR/post-merge"
   MARKER="# aitronos-standards-post-merge"
 
@@ -652,45 +652,8 @@ HOOK
 fi
 echo ""
 
-# ============================================================================
-# Step 11 — Install pre-push hook (block mass file deletions)
-# ============================================================================
-
-echo -e "${BOLD}Step 11: Git Pre-Push Hook (mass-deletion guard)${NC}"
-
-PRE_PUSH_HOOK="$GIT_HOOKS_DIR/pre-push"
-STANDARDS_PRE_PUSH_HOOK="$SUBMODULE_DIR/scripts/hooks/pre-push"
-PRE_PUSH_MARKER="# aitronos-standards-pre-push"
-
-if [ -f "$PRE_PUSH_HOOK" ]; then
-  if grep -q "$PRE_PUSH_MARKER" "$PRE_PUSH_HOOK" 2>/dev/null; then
-    success "Pre-push hook already installed"
-  else
-    # Append to existing hook
-    cat >> "$PRE_PUSH_HOOK" << HOOK
-
-$PRE_PUSH_MARKER
-# Block pushes that mass-delete files
-if [ -x ".standards/scripts/hooks/pre-push" ]; then
-  .standards/scripts/hooks/pre-push
-fi
-HOOK
-    success "Appended mass-deletion guard to existing pre-push hook"
-  fi
-else
-  # Create new hook
-  cat > "$PRE_PUSH_HOOK" << HOOK
-#!/usr/bin/env bash
-$PRE_PUSH_MARKER
-# Block pushes that mass-delete files
-if [ -x ".standards/scripts/hooks/pre-push" ]; then
-  .standards/scripts/hooks/pre-push
-fi
-HOOK
-  chmod +x "$PRE_PUSH_HOOK"
-  success "Created pre-push hook (blocks mass file deletions)"
-fi
-echo ""
+# Step 11 is handled by install-hooks.sh (Step 9) which installs
+# the pre-push hook with both branch protection and mass-deletion guard.
 
 # ============================================================================
 # Summary

@@ -1,0 +1,37 @@
+name: Protect against mass deletion
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  check-deletions:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Block mass file deletions
+        run: |
+          DELETED=$(git diff --diff-filter=D --name-only origin/main...HEAD | wc -l | tr -d ' ')
+          TOTAL=$(git ls-tree -r origin/main --name-only | wc -l | tr -d ' ')
+
+          echo "Files deleted in this PR: $DELETED"
+          echo "Total files on main: $TOTAL"
+
+          if [ "$TOTAL" -eq 0 ]; then
+            echo "Main branch has no files — skipping check."
+            exit 0
+          fi
+
+          PERCENT=$((DELETED * 100 / TOTAL))
+          echo "Deletion percentage: ${PERCENT}%"
+
+          if [ "$PERCENT" -gt 30 ]; then
+            echo ""
+            echo "::error::This PR deletes ${DELETED} files (${PERCENT}% of the repo). PRs that remove more than 30% of files are blocked. If this is intentional, get admin approval and add the 'approved-mass-deletion' label."
+            exit 1
+          fi
+
+          echo "Deletion check passed."

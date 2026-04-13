@@ -554,21 +554,22 @@ fi
 echo ""
 
 # ============================================================================
-# Step 9 — Install post-merge git hook (auto-sync on pull)
+# Step 9 — Install git hooks (branch protection + auto-sync)
 # ============================================================================
 
-echo -e "${BOLD}Step 9: Git Post-Merge Hook${NC}"
+echo -e "${BOLD}Step 9: Git Hooks (Branch Protection + Auto-Sync)${NC}"
 
-GIT_HOOKS_DIR="$(git rev-parse --git-dir)/hooks"
-POST_MERGE_HOOK="$GIT_HOOKS_DIR/post-merge"
-STANDARDS_HOOK="$SUBMODULE_DIR/scripts/hooks/post-merge"
-MARKER="# aitronos-standards-post-merge"
+if [ -x "$SUBMODULE_DIR/scripts/git/install-hooks.sh" ]; then
+  "$SUBMODULE_DIR/scripts/git/install-hooks.sh"
+else
+  # Fallback: install post-merge hook directly
+  GIT_HOOKS_DIR="$(git rev-parse --git-dir)/hooks"
+  POST_MERGE_HOOK="$GIT_HOOKS_DIR/post-merge"
+  MARKER="# aitronos-standards-post-merge"
 
-if [ -f "$POST_MERGE_HOOK" ]; then
-  if grep -q "$MARKER" "$POST_MERGE_HOOK" 2>/dev/null; then
+  if [ -f "$POST_MERGE_HOOK" ] && grep -q "$MARKER" "$POST_MERGE_HOOK" 2>/dev/null; then
     success "Post-merge hook already installed"
-  else
-    # Append to existing hook
+  elif [ -f "$POST_MERGE_HOOK" ]; then
     cat >> "$POST_MERGE_HOOK" << HOOK
 
 $MARKER
@@ -578,10 +579,8 @@ if [ -x ".standards/scripts/hooks/post-merge" ]; then
 fi
 HOOK
     success "Appended standards sync to existing post-merge hook"
-  fi
-else
-  # Create new hook
-  cat > "$POST_MERGE_HOOK" << HOOK
+  else
+    cat > "$POST_MERGE_HOOK" << HOOK
 #!/usr/bin/env bash
 $MARKER
 # Auto-sync standards after pull/merge
@@ -589,9 +588,28 @@ if [ -x ".standards/scripts/hooks/post-merge" ]; then
   .standards/scripts/hooks/post-merge
 fi
 HOOK
-  chmod +x "$POST_MERGE_HOOK"
-  success "Created post-merge hook (auto-syncs standards on pull)"
+    chmod +x "$POST_MERGE_HOOK"
+    success "Created post-merge hook (auto-syncs standards on pull)"
+  fi
 fi
+
+# Symlink helper scripts into project if scripts/git/ exists
+PROJ_GIT_SCRIPTS="$PROJECT_ROOT/scripts/git"
+if [ ! -d "$PROJ_GIT_SCRIPTS" ]; then
+  mkdir -p "$PROJ_GIT_SCRIPTS"
+  success "Created scripts/git/"
+fi
+
+for script in new-branch.sh sync.sh submit.sh install-hooks.sh; do
+  target="$PROJ_GIT_SCRIPTS/$script"
+  source="../../$SUBMODULE_DIR/scripts/git/$script"
+  if [ -e "$target" ] || [ -L "$target" ]; then
+    warn "$target (already exists)"
+  elif [ -f "$SUBMODULE_DIR/scripts/git/$script" ]; then
+    ln -s "$source" "$target"
+    success "Linked scripts/git/$script"
+  fi
+done
 echo ""
 
 # ============================================================================

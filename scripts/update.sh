@@ -235,20 +235,22 @@ fi
 echo ""
 
 # ============================================================================
-# Step 7 — Ensure post-merge git hook is installed
+# Step 7 — Verify git hooks (branch protection + auto-sync)
 # ============================================================================
 
-echo -e "${BOLD}Step 7: Verify Post-Merge Hook${NC}"
+echo -e "${BOLD}Step 7: Verify Git Hooks${NC}"
 
-SUBMODULE_DIR=".standards"
-GIT_HOOKS_DIR="$(git rev-parse --git-dir)/hooks"
-POST_MERGE_HOOK="$GIT_HOOKS_DIR/post-merge"
-MARKER="# aitronos-standards-post-merge"
+if [ -x "$SUBMODULE_DIR/scripts/git/install-hooks.sh" ]; then
+  "$SUBMODULE_DIR/scripts/git/install-hooks.sh"
+else
+  GIT_HOOKS_DIR="$(git rev-parse --git-dir)/hooks"
+  POST_MERGE_HOOK="$GIT_HOOKS_DIR/post-merge"
+  MARKER="# aitronos-standards-post-merge"
 
-if [ -f "$POST_MERGE_HOOK" ] && grep -q "$MARKER" "$POST_MERGE_HOOK" 2>/dev/null; then
-  success "Post-merge hook already installed"
-elif [ -f "$POST_MERGE_HOOK" ]; then
-  cat >> "$POST_MERGE_HOOK" << HOOK
+  if [ -f "$POST_MERGE_HOOK" ] && grep -q "$MARKER" "$POST_MERGE_HOOK" 2>/dev/null; then
+    success "Post-merge hook already installed"
+  elif [ -f "$POST_MERGE_HOOK" ]; then
+    cat >> "$POST_MERGE_HOOK" << HOOK
 
 $MARKER
 # Auto-sync standards after pull/merge
@@ -256,9 +258,9 @@ if [ -x ".standards/scripts/hooks/post-merge" ]; then
   .standards/scripts/hooks/post-merge
 fi
 HOOK
-  success "Appended standards sync to existing post-merge hook"
-else
-  cat > "$POST_MERGE_HOOK" << HOOK
+    success "Appended standards sync to existing post-merge hook"
+  else
+    cat > "$POST_MERGE_HOOK" << HOOK
 #!/usr/bin/env bash
 $MARKER
 # Auto-sync standards after pull/merge
@@ -266,8 +268,9 @@ if [ -x ".standards/scripts/hooks/post-merge" ]; then
   .standards/scripts/hooks/post-merge
 fi
 HOOK
-  chmod +x "$POST_MERGE_HOOK"
-  success "Created post-merge hook"
+    chmod +x "$POST_MERGE_HOOK"
+    success "Created post-merge hook"
+  fi
 fi
 echo ""
 

@@ -307,6 +307,43 @@ fi
 echo ""
 
 # ============================================================================
+# Step 9 — Ensure pre-push hook is installed (block mass file deletions)
+# ============================================================================
+
+echo -e "${BOLD}Step 9: Pre-Push Hook (mass-deletion guard)${NC}"
+
+PRE_PUSH_HOOK="$GIT_HOOKS_DIR/pre-push"
+PRE_PUSH_MARKER="# aitronos-standards-pre-push"
+
+if [ -f "$PRE_PUSH_HOOK" ]; then
+  if grep -q "$PRE_PUSH_MARKER" "$PRE_PUSH_HOOK" 2>/dev/null; then
+    success "Pre-push hook already installed"
+  else
+    cat >> "$PRE_PUSH_HOOK" << HOOK
+
+$PRE_PUSH_MARKER
+# Block pushes that mass-delete files
+if [ -x ".standards/scripts/hooks/pre-push" ]; then
+  .standards/scripts/hooks/pre-push
+fi
+HOOK
+    success "Appended mass-deletion guard to existing pre-push hook"
+  fi
+else
+  cat > "$PRE_PUSH_HOOK" << HOOK
+#!/usr/bin/env bash
+$PRE_PUSH_MARKER
+# Block pushes that mass-delete files
+if [ -x ".standards/scripts/hooks/pre-push" ]; then
+  .standards/scripts/hooks/pre-push
+fi
+HOOK
+  chmod +x "$PRE_PUSH_HOOK"
+  success "Created pre-push hook (blocks mass file deletions)"
+fi
+echo ""
+
+# ============================================================================
 # Summary
 # ============================================================================
 

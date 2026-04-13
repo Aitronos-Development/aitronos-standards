@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# Aitronos Standards — Pre-push hook
+# Blocks pushes that delete more than 30% of tracked files.
+# Prevents accidental mass-deletion incidents (see: 796a553).
+
+set -euo pipefail
+
+THRESHOLD=30  # percent
+
+while read -r local_ref local_oid remote_ref remote_oid; do
+  # Skip deletes (all zeros)
+  if [ "$local_oid" = "0000000000000000000000000000000000000000" ]; then
+    continue
+  fi
+
+  # Skip if remote is a new branch (no remote_oid to compare against)
+  if [ "$remote_oid" = "0000000000000000000000000000000000000000" ]; then
+    continue
+  fi
+
+  # Count files on the remote side and deletions in this push
+  total=$(git ls-tree -r --name-only "$remote_oid" 2>/dev/null | wc -l | tr -d ' ')
+  deleted=$(git diff --diff-filter=D --name-only "$remote_oid" "$local_oid" 2>/dev/null | wc -l | tr -d ' ')
+
+  if [ "$total" -eq 0 ]; then
+    continue
+  fi
+
+  percent=$((deleted * 100 / total))
+
+  if [ "$percent" -gt "$THRESHOLD" ]; then
+    echo ""
+    echo "🚫 PUSH BLOCKED — mass deletion detected"
+    echo ""
+    echo "   This push deletes $deleted of $total files (${percent}%)."
+    echo "   Threshold: ${THRESHOLD}%"
+    echo ""
+    echo "   If this is intentional, bypass with:  git push --no-verify"
+    echo ""
+    exit 1
+  fi
+done
+
+exit 0

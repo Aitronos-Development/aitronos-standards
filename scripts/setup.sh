@@ -635,6 +635,46 @@ fi
 echo ""
 
 # ============================================================================
+# Step 11 — Install pre-push hook (block mass file deletions)
+# ============================================================================
+
+echo -e "${BOLD}Step 11: Git Pre-Push Hook (mass-deletion guard)${NC}"
+
+PRE_PUSH_HOOK="$GIT_HOOKS_DIR/pre-push"
+STANDARDS_PRE_PUSH_HOOK="$SUBMODULE_DIR/scripts/hooks/pre-push"
+PRE_PUSH_MARKER="# aitronos-standards-pre-push"
+
+if [ -f "$PRE_PUSH_HOOK" ]; then
+  if grep -q "$PRE_PUSH_MARKER" "$PRE_PUSH_HOOK" 2>/dev/null; then
+    success "Pre-push hook already installed"
+  else
+    # Append to existing hook
+    cat >> "$PRE_PUSH_HOOK" << HOOK
+
+$PRE_PUSH_MARKER
+# Block pushes that mass-delete files
+if [ -x ".standards/scripts/hooks/pre-push" ]; then
+  .standards/scripts/hooks/pre-push
+fi
+HOOK
+    success "Appended mass-deletion guard to existing pre-push hook"
+  fi
+else
+  # Create new hook
+  cat > "$PRE_PUSH_HOOK" << HOOK
+#!/usr/bin/env bash
+$PRE_PUSH_MARKER
+# Block pushes that mass-delete files
+if [ -x ".standards/scripts/hooks/pre-push" ]; then
+  .standards/scripts/hooks/pre-push
+fi
+HOOK
+  chmod +x "$PRE_PUSH_HOOK"
+  success "Created pre-push hook (blocks mass file deletions)"
+fi
+echo ""
+
+# ============================================================================
 # Summary
 # ============================================================================
 
@@ -648,7 +688,7 @@ echo "  Rules:      $RULES_LINKED linked, $RULES_SKIPPED skipped (local override
 echo "  Skills:     $SKILLS_LINKED linked, $SKILLS_SKIPPED skipped (local override)"
 echo "  Agents:     $AGENTS_LINKED linked, $AGENTS_SKIPPED skipped (local override)"
 echo "  Hooks:      $CLAUDE_SETTINGS (PreCompact for orchestrator)"
-echo "  Git hook:   post-merge (auto-syncs standards on pull)"
+echo "  Git hooks:  post-merge, prepare-commit-msg, pre-push"
 echo "  VS Code:    $VSCODE_SETTINGS (crash prevention)"
 echo ""
 echo -e "${BOLD}Next steps:${NC}"

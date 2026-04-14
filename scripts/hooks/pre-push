@@ -1,18 +1,15 @@
 #!/usr/bin/env bash
-# flowplate-branch-protection-v1
-# Aitronos Standards — Pre-push hook
+# aitronos-safe-push-v1
+# Aitronos Standards — Pre-push safety hook
 #
-# 1. Blocks direct pushes to protected branches (develop, main, etc.)
-# 2. Blocks pushes that delete more than 30% of tracked files
-#
-# The branch protection is also enforced server-side (GitHub ruleset),
-# but this gives fast, friendly errors before the round-trip.
-#
-# Installed automatically by .standards/scripts/setup.sh
+# Prevents accidental code loss when multiple people push to the same branch.
+# Three checks:
+#   1. Auto-fetch remote and REFUSE if local is behind (must pull first)
+#   2. Create a backup tag before every push (so nothing is ever truly lost)
+#   3. Block pushes that mass-delete files (>30% of tracked files)
 
 set -euo pipefail
 
-PROTECTED_BRANCHES="develop main master production"
 DELETION_THRESHOLD=30  # percent
 
 remote="$1"
@@ -20,33 +17,48 @@ remote="$1"
 while read -r local_ref local_oid remote_ref remote_oid; do
 	branch_name="${remote_ref#refs/heads/}"
 
-	# ── Check 1: Block pushes to protected branches ────────────────────
-	for protected in $PROTECTED_BRANCHES; do
-		if [ "$branch_name" = "$protected" ]; then
+	# Skip branch deletes
+	if [ "$local_oid" = "0000000000000000000000000000000000000000" ]; then
+		continue
+	fi
+
+	# ── Check 1: Refuse push if behind remote ─────────────────────────
+	# Fetch the latest state of this branch from the remote
+	git fetch "$remote" "$branch_name" --quiet 2>/dev/null || true
+
+	REMOTE_HEAD="$(git rev-parse "refs/remotes/$remote/$branch_name" 2>/dev/null || true)"
+
+	if [ -n "$REMOTE_HEAD" ] && [ "$REMOTE_HEAD" != "$local_oid" ]; then
+		# Check if remote head is an ancestor of local (we're ahead = safe)
+		if ! git merge-base --is-ancestor "$REMOTE_HEAD" "$local_oid" 2>/dev/null; then
 			echo ""
 			echo "╔══════════════════════════════════════════════════════════╗"
-			echo "║  BLOCKED: Direct push to '$protected' is not allowed.   ║"
+			echo "║  BLOCKED: Remote '$branch_name' has commits you don't   ║"
+			echo "║  have locally. Pull first to avoid overwriting work.    ║"
 			echo "╠══════════════════════════════════════════════════════════╣"
-			echo "║  Create a feature branch and open a PR instead:         ║"
 			echo "║                                                         ║"
-			echo "║    scripts/git/new-branch.sh feat my-feature            ║"
-			echo "║    # ... make changes ...                               ║"
-			echo "║    scripts/git/submit.sh                                ║"
+			echo "║    git pull --rebase origin $branch_name"
 			echo "║                                                         ║"
-			echo "║  This rule is also enforced server-side by GitHub.      ║"
-			echo "║  Even --no-verify won't help — GitHub will reject it.   ║"
+			echo "║  This ensures your teammates' changes are preserved.    ║"
 			echo "╚══════════════════════════════════════════════════════════╝"
 			echo ""
 			exit 1
 		fi
+	fi
+
+	# ── Check 2: Auto-backup before push ──────────────────────────────
+	# Create a timestamped backup tag so the pre-push state can always
+	# be recovered, even if the push introduces a bad merge.
+	BACKUP_TAG="backup/${branch_name}/$(date -u +%Y%m%d-%H%M%S)"
+	git tag "$BACKUP_TAG" "$local_oid" 2>/dev/null || true
+
+	# Keep only the last 20 backup tags for this branch (prune old ones)
+	git tag -l "backup/${branch_name}/*" | sort | head -n -20 | while read -r old_tag; do
+		git tag -d "$old_tag" 2>/dev/null || true
 	done
 
-	# ── Check 2: Block mass deletions ──────────────────────────────────
-	# Skip branch deletes (all zeros)
-	if [ "$local_oid" = "0000000000000000000000000000000000000000" ]; then
-		continue
-	fi
-	# Skip new branches (no remote_oid to compare against)
+	# ── Check 3: Block mass deletions ─────────────────────────────────
+	# Skip if remote is a new branch (no remote_oid to compare against)
 	if [ "$remote_oid" = "0000000000000000000000000000000000000000" ]; then
 		continue
 	fi
@@ -58,12 +70,13 @@ while read -r local_ref local_oid remote_ref remote_oid; do
 		percent=$((deleted * 100 / total))
 		if [ "$percent" -gt "$DELETION_THRESHOLD" ]; then
 			echo ""
-			echo "PUSH BLOCKED — mass deletion detected"
-			echo ""
-			echo "   This push deletes $deleted of $total files (${percent}%)."
-			echo "   Threshold: ${DELETION_THRESHOLD}%"
-			echo ""
-			echo "   If this is intentional, bypass with:  git push --no-verify"
+			echo "╔══════════════════════════════════════════════════════════╗"
+			echo "║  BLOCKED: Mass deletion detected.                       ║"
+			echo "║  This push deletes $deleted of $total files (${percent}%).          ║"
+			echo "║  Threshold: ${DELETION_THRESHOLD}%                                      ║"
+			echo "╠══════════════════════════════════════════════════════════╣"
+			echo "║  If intentional: git push --no-verify                   ║"
+			echo "╚══════════════════════════════════════════════════════════╝"
 			echo ""
 			exit 1
 		fi

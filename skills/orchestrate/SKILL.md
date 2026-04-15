@@ -122,27 +122,31 @@ No `technical-execution/` folder. Phases go directly under `phases/`.
 
 ## Human Checkpoints
 
-**Human-in-the-loop verification is MANDATORY at defined points.** These are not optional — execution STOPS and waits for user confirmation before proceeding.
+**Default mode is autonomous.** Do NOT stop for checkpoints unless one of the conditions below is true. The user wants to be managed by exception, not to approve every step.
 
-### When Checkpoints Trigger
+### When Checkpoints Trigger (opt-in, not default)
 
-| Trigger | Why |
-|---------|-----|
-| **Database migration applied** | Schema changes are hard to reverse. User should verify the migration is correct before building on top of it. |
-| **Core model/service modified** | Changes to shared infrastructure (auth, permissions, base models) can break other features. |
-| **Phase boundary** | Before starting the next phase, user should verify the previous phase works end-to-end. |
-| **Security-sensitive change** | Auth, permissions, isolation, data access — user must verify. |
-| **External integration** | Third-party API integration — user should test the real connection. |
-| **Large refactor complete** | Touching 10+ files — user should spot-check before building more on top. |
-| **UI-impacting change** | If the frontend depends on response shapes, user should verify the contract. |
-| **Spec says "CHECKPOINT"** | The spec can explicitly mark subphases as checkpoint gates. |
+Only stop for a human checkpoint when:
 
-### What Happens at a Checkpoint
+1. **The user explicitly asks for one** — e.g. "check in with me after phase 2", "pause before migrations", "let me verify before you continue", or a `CHECKPOINT` marker in the spec that the user authored.
+2. **You have genuine uncertainty that blocks continuing safely** — you're about to do something irreversible or destructive and your confidence is low. Examples: a destructive migration on production-shaped data, an auth/permission rewrite where the spec is ambiguous, an external integration where the contract is unclear and guessing wrong would cost real money or leak data.
+3. **A Critical concern is open** in `notes/concerns.md` — do not proceed until it's resolved.
+
+That's it. Do NOT checkpoint by default for:
+- Phase boundaries
+- Normal migrations (apply them, test them, move on)
+- Routine security/auth changes that follow existing patterns
+- Large refactors that are well-specced
+- UI-impacting changes where the response shape is in the spec
+
+If you're tempted to checkpoint "just to be safe" — don't. Finish the work, verify with QA, and report the result.
+
+### What Happens at a Checkpoint (when one actually triggers)
 
 1. **STOP all developer agents** — no new work starts
 2. **Present a checkpoint report** to the user:
    ```
-   CHECKPOINT — {reason}
+   CHECKPOINT — {reason: user asked / genuine uncertainty / critical concern}
 
    Completed: {what was just finished}
    Tests: {pass/fail count}
@@ -151,7 +155,6 @@ No `technical-execution/` folder. Phases go directly under `phases/`.
    Please verify:
    - [ ] {specific thing to check}
    - [ ] {another thing to check}
-   - [ ] {UI integration point if applicable}
 
    Reply "continue" to proceed or describe what needs fixing.
    ```
@@ -160,23 +163,7 @@ No `technical-execution/` folder. Phases go directly under `phases/`.
 
 ### Marking Checkpoints in Specs
 
-In spec documents, mark checkpoint gates explicitly:
-
-```markdown
-## Subphase N.3 — Core Endpoints
-
-...
-
-### CHECKPOINT: Human Verification Required
-
-Before proceeding to N.4, the user must verify:
-- [ ] CRUD endpoints work via real API calls
-- [ ] Response shapes match frontend expectations
-- [ ] Auth and isolation are correct
-- [ ] UI can render the list/detail views with real data
-
-**This is a gate — N.4 MUST NOT start until this checkpoint is approved.**
-```
+Only add `CHECKPOINT` markers when the user explicitly requested one, or the subphase is genuinely irreversible and risky. Don't sprinkle them across every spec by default — they interrupt flow.
 
 ## Four Modes
 
@@ -243,7 +230,7 @@ If a user says "let's build it" but the spec has open questions, **ask the quest
    - **Subphase files** (one per subphase, fully self-contained): Each file must contain ALL context a developer needs — file paths, schemas, method signatures, business logic, error codes, stop conditions, data shapes, verification steps. A developer reading ONLY their subphase file must be able to implement it without opening any other file.
    - **Test subphase file**: unit tests (exact function names), integration tests, real API verification (exact curl commands + expected responses), compliance checks
    - Mark existing components with `[EXISTS]`
-   - Mark checkpoint gates with `CHECKPOINT`
+   - **Only add `CHECKPOINT` markers if the user asked for them or the subphase is genuinely irreversible/risky** — don't gate every phase by default
    - **Duplicate shared context across subphase files** — cross-references between subphase files are forbidden. If two subphases need the same data shape, include it in both files.
 
 6. **Update tracking files**:
@@ -278,8 +265,8 @@ The `/tech-spec` skill has the detailed template and conventions for specs. You 
    - Check `{{config:paths.specs}}/{project}/phases/` for the phase
    - Understand scope: how many endpoints, layers, files
    - Identify dependencies between subphases
-   - **Identify checkpoint gates** — which subphases require human verification before continuing?
-   - Check `notes/concerns.md` for open risks related to this phase
+   - Note any explicit `CHECKPOINT` markers the user or spec author added — those are the only planned stops
+   - Check `notes/concerns.md` for open risks related to this phase (Critical concerns block execution until resolved)
    - **Housekeeping: scan all phase folders** — list the phase directories with `ls`, then check `ROADMAP.md`. If any phases are marked "Done" in the ROADMAP but their folder is missing the `-done` suffix, rename them with `mv` via Bash immediately before proceeding. This catches drift from prior sessions.
 
 2. **Design the team** — Decide how many developers and what each one does:
@@ -295,11 +282,11 @@ The `/tech-spec` skill has the detailed template and conventions for specs. You 
    - Group by feature (model+repo+service+route together), not by layer
    - Docs/tests can be a separate developer
    - Use task `blockedBy` for sequential dependencies
-   - **Group work BEFORE each checkpoint** — don't span a checkpoint across parallel tasks
+   - If the spec has an explicit `CHECKPOINT` marker, group work so parallel tasks don't span across it
 
 3. **Present plan to user** — Show:
    - Team structure, task breakdown, file ownership
-   - **Checkpoint gates** — "After tasks 1-3 complete, we'll pause for your verification before proceeding to tasks 4-6"
+   - Any explicit checkpoint gates (only if the user or spec requested them — otherwise skip this line)
    - Wait for approval (unless autonomy granted)
 
 4. **Create team and tasks** — `TeamCreate` -> `TaskCreate` for each work item -> Spawn developers with prompts that:
@@ -312,12 +299,14 @@ The `/tech-spec` skill has the detailed template and conventions for specs. You 
 
 5. **Monitor** — Messages arrive automatically. Use `TaskList` to check progress. Redirect developers if off-track. Resolve blockers.
 
-6. **Checkpoint gates** — When a checkpoint is reached:
+6. **Checkpoint gates (only when actually triggered)** — Checkpoints are opt-in (see Human Checkpoints section). If a checkpoint IS triggered — user asked for one, spec has a `CHECKPOINT` marker, you have genuine uncertainty about an irreversible step, or a Critical concern is open — then:
    - **STOP** — don't assign any tasks past the checkpoint
    - Run verification: tests, compliance, basic file existence checks
-   - Present checkpoint report to user (see Human Checkpoints section above)
+   - Present checkpoint report to user
    - **Wait for user approval** before continuing
    - If user reports issues, create fix tasks and re-verify before proceeding
+
+   If no checkpoint trigger applies, keep going — do not pause "just to be safe".
 
 7. **QA — Per-Phase Testing (MANDATORY)** — When all developers for a phase finish, spawn **two QA agents in parallel** BEFORE moving to the next phase:
 
@@ -545,10 +534,7 @@ No matter the source, the workflow is the same.
    - If an agent is working on something now obsolete, let it finish (or note the pivot)
    - Dispatch new work based on the updated requirements
 
-7. **Trigger checkpoints for big changes** — Even in live mode, if a change touches security, auth, migrations, or shared infrastructure:
-   - Pause after the agent completes
-   - Present a mini checkpoint: "This changed isolation logic — please verify before I continue"
-   - Wait for user confirmation
+7. **Trigger a checkpoint only when one actually applies** — see the Human Checkpoints section. In live mode that means: the user asked you to check in, or you have genuine uncertainty about an irreversible change (e.g. destructive migration, auth rewrite with ambiguous spec). Otherwise finish the change, verify, and report — don't pause for routine security/auth/migration work that follows existing patterns.
 
 ### Example Flow
 
@@ -584,16 +570,17 @@ You:  "Type detection added. Detail endpoint now returns the type field. Tests p
 ### NEVER
 - Write application code — not models, routes, services, tests, schemas, migrations, or docs
 - Edit files in `{{config:paths.source}}`, `{{config:paths.tests}}`, migrations, `{{config:paths.public_docs}}` — ALWAYS spawn a developer
-- Skip verification — quality gates are mandatory
+- Skip verification — QA quality gates are mandatory
 - Spawn developers without the user knowing the plan (unless autonomy granted)
-- Skip a checkpoint gate — human verification is mandatory where marked
+- Skip a checkpoint that was explicitly triggered by the user, a spec `CHECKPOINT` marker, or an open Critical concern
 - Proceed past a Critical concern without user approval
+- **Add checkpoints "just to be safe"** — default is autonomous; checkpoints are opt-in
 
 ### ALWAYS
 - Do minimal triage before delegating — enough to write a clear task, not a deep dive
 - Tell developers WHERE to look, not WHAT the code says — they read files themselves
 - Verify developer output — run tests, check files exist, spot-check implementations
-- Stop at checkpoint gates and present the checkpoint report
+- Stop at checkpoints that were actually triggered (user-requested, spec-marked, or genuine uncertainty about an irreversible step)
 - **Rename phase folders with `-done` suffix immediately after per-phase QA passes** — this is part of step 7, not a separate step
 - Update `ROADMAP.md` after phase completion
 - Log concerns in `notes/concerns.md` when something goes wrong
@@ -603,12 +590,12 @@ You:  "Type detection added. Detail endpoint now returns the type field. Tests p
 - **Update the audit tracking document** — if `compliance_reports/audits/{domain}-audit.md` exists, check off findings as they are verified, update counts, and append to the Fix Log. The tracking document is the contract — work is not done until every box is checked.
 
 ### AUTONOMY MODE
-When the user says "just run it" or grants autonomy:
+Autonomous is the **default**. "Just run it" is already how we operate — you don't need the user to say it. What autonomy means in practice:
 - Skip team plan approval — design and spawn directly
-- Skip implementation checkpoints — go straight to verification
-- **Still stop at security/migration/auth checkpoints** — these are never skippable
-- **Still spawn QA agents** — QA is NEVER skippable, even in autonomy mode
-- **Still complete the PRE-REPORT CHECKLIST** — the gate in Step 9 applies regardless of autonomy
+- Skip phase-boundary pauses — run straight through
+- **Still stop at checkpoints that were actually requested** — explicit user asks, spec `CHECKPOINT` markers, open Critical concerns, or genuine uncertainty about an irreversible step
+- **Still spawn QA agents** — QA is NEVER skippable
+- **Still complete the PRE-REPORT CHECKLIST** — the gate in Step 9 applies regardless
 - **Still rename phase folders to -done** — housekeeping is mandatory
 - Still verify quality — non-negotiable
 - Report a summary after completion

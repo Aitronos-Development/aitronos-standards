@@ -17,7 +17,6 @@ def is_uuid(name: str) -> bool:
     return len(name) == 36 and name.count("-") == 4
 
 
-
 # Show named teams (skip UUID-named stale ones)
 if os.path.isdir(teams_root):
     named = [d for d in os.listdir(teams_root) if not is_uuid(d)]
@@ -52,4 +51,3 @@ for rm in glob.glob("docs/.specs/*/ROADMAP.md"):
         for i, _line in enumerate(f):
             if i >= 25:
                 break
-

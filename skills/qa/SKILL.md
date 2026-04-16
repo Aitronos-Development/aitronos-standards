@@ -319,7 +319,7 @@ FLOW 2: Parent-Child Relationships
   4. Move child to different parent → 200
   5. List children of original parent → 200, verify empty
   6. Delete parent → verify cascade behavior
-  
+
 FLOW 3: Concurrent Operations
   1. Create resource A
   2. In parallel: Update A + Read A → no race condition
@@ -647,7 +647,7 @@ When the orchestrator spawns QA agents:
 
 ```
 Agent(subagent_type="general-purpose", description="QA — unit tests + coverage", prompt="
-  Run /qa unit on {scope}. 
+  Run /qa unit on {scope}.
   Run all tests, analyze coverage, identify gaps, write missing tests.
   Do not stop until coverage >= 90% and all tests pass.
 ")

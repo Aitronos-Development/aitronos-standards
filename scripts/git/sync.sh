@@ -3,7 +3,9 @@
 # Aitronos Standards — Sync Branch
 #
 # Rebases the current feature branch on the latest default branch.
-# Auto-stashes uncommitted changes and restores them after.
+# Refuses to run with uncommitted changes — commit or stash them yourself
+# first. This is deliberate: silent auto-stashing has caused lost work when
+# `git stash pop` hit a conflict and the stash was forgotten.
 #
 # Usage:
 #   .standards/scripts/git/sync.sh
@@ -24,12 +26,18 @@ for p in $PROTECTED; do
 	fi
 done
 
-if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null; then
-	echo "→ Stashing uncommitted changes..."
-	git stash push -u -m "auto-stash before sync $(date -u +%Y-%m-%dT%H:%MZ)"
-	STASHED=true
-else
-	STASHED=false
+if ! git diff --quiet 2>/dev/null || ! git diff --cached --quiet 2>/dev/null || [ -n "$(git ls-files --others --exclude-standard)" ]; then
+	echo ""
+	echo "╔══════════════════════════════════════════════════════════╗"
+	echo "║  Working tree is dirty — sync aborted.                  ║"
+	echo "║                                                         ║"
+	echo "║  Commit your work, or stash it yourself:                ║"
+	echo "║    git stash push -u -m \"wip\"                         ║"
+	echo "║                                                         ║"
+	echo "║  Then re-run sync. Restore later with:                  ║"
+	echo "║    git stash pop                                        ║"
+	echo "╚══════════════════════════════════════════════════════════╝"
+	exit 1
 fi
 
 echo "→ Fetching latest $DEFAULT_BRANCH..."
@@ -49,11 +57,6 @@ if ! git rebase "origin/$DEFAULT_BRANCH"; then
 	echo "║    git rebase --abort                                   ║"
 	echo "╚══════════════════════════════════════════════════════════╝"
 	exit 1
-fi
-
-if $STASHED; then
-	echo "→ Restoring stashed changes..."
-	git stash pop
 fi
 
 echo ""

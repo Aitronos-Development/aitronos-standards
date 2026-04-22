@@ -310,11 +310,12 @@ The `/tech-spec` skill has the detailed template and conventions for specs. You 
 
 7. **QA — Per-Phase Testing (MANDATORY)** — When all developers for a phase finish, spawn **two QA agents in parallel** BEFORE moving to the next phase:
 
-   **QA Agent A — Unit Tests & Coverage** (runs in background):
+   **QA Agent A — Unit Tests, Coverage & Compliance** (runs in background):
    - Run all unit tests: `{{config:commands.test.unit}}`
    - Verify **100% test coverage** for new code — every service method, every route, every error branch must have a test
    - If tests are missing, **write them** — don't just report the gap
    - Run compliance: `{{config:commands.compliance}}`
+   - **Verify FULL code compliance for all new/modified files** — compliance must be GREEN for anything this phase added or changed. No warnings or errors on new code. See "Code Compliance Gate" below.
    - Check code quality against the project's compliance thresholds and conventions
 
    **QA Agent B — Real API Testing** (runs in background):
@@ -366,6 +367,8 @@ The `/tech-spec` skill has the detailed template and conventions for specs. You 
 
    □ QA Agent A was spawned AND returned a pass report (unit tests + compliance)
    □ QA Agent B was spawned AND returned a pass report (real API calls)
+   □ Full code compliance verified — no new errors/warnings on any file touched this phase
+   □ Any pre-existing non-compliance that got WORSE due to this phase was flagged to the user with a refactor recommendation (separate-thread default)
    □ If either QA agent found bugs → fix tasks were created, fixes verified, QA re-run
    □ Phase folder renamed to -done suffix (mv confirmed, not just planned)
    □ ROADMAP.md updated with phase marked "Done"
@@ -565,6 +568,58 @@ You:  "Type detection added. Detail endpoint now returns the type field. Tests p
 
 ---
 
+## Code Compliance Gate — Non-Negotiable
+
+**Every piece of code a developer writes or modifies MUST be fully code-compliant before the phase is marked done.** This applies to Modes 2 (execute), 3 (tasks), and 4 (live).
+
+### What "code compliant" means
+
+- Passes `{{config:commands.compliance}}` with no errors and no new warnings on touched files
+- Respects thresholds in `.claude/rules/compliance-thresholds.md` — file size, function size, complexity, nesting, parameter count, class size, line length
+- Follows all project rules in `.claude/rules/` — auth patterns, error handling, repository organization, logging, ID formatting, migration safety, secrets, etc.
+- Lint and type checks clean
+
+### Rule: new code must be born compliant
+
+Every developer prompt MUST include this instruction verbatim (or equivalent):
+
+> **Compliance is mandatory.** Before returning, run `{{config:commands.compliance}}` and fix every error and warning your changes introduced. Respect the thresholds in `.claude/rules/compliance-thresholds.md` (files <800 lines, functions <80 lines, complexity <12, nesting <4, params <6). If a file you touched now exceeds a threshold because of your changes, refactor it as part of this task — splitting helpers into shared utils per `.claude/rules/code-organization.md`. Do NOT return until compliance is green on all files you modified.
+
+### Rule: pre-existing non-compliance — strongly advise, don't silently extend
+
+If a developer needs to modify a file that is **already non-compliant before their change** (e.g. already 950 lines, or contains a function already at complexity 15):
+
+1. **Make the smallest surgical change possible** — do not expand the non-compliance. Don't add lines to a file already over the size limit if it can be avoided.
+2. **If the change unavoidably pushes the file further over the threshold**, developers must stop and flag it to the orchestrator.
+3. **The orchestrator then strongly advises the user** that this file needs refactoring, with a concrete recommendation:
+
+   ```
+   ⚠️ COMPLIANCE DRIFT — {file_path}
+
+   Status before this task: {e.g., 950 lines (over 800 warn threshold)}
+   Status after this task:  {e.g., 1020 lines (over 1000 error threshold)}
+
+   This file is now over the hard limit and MUST be refactored. I strongly
+   recommend handling the refactor in a **separate thread/session** so it
+   doesn't bloat the current phase's scope or context. Suggested split:
+   - {concrete suggestion, e.g., "extract validation helpers to shared utils"}
+   - {concrete suggestion}
+
+   Options:
+   1. Refactor now in a fresh /orchestrate session (recommended)
+   2. Defer — I'll log a Critical concern in notes/concerns.md and we proceed
+   3. I'll refactor inline in this phase (adds scope, not recommended)
+   ```
+
+4. **Default recommendation: separate thread.** The current phase should stay focused. Refactors have their own blast radius and deserve their own QA cycle.
+5. **If the user defers**, log it as a Critical concern in `notes/concerns.md` with the file path, current size/complexity, and the commit that pushed it over. A deferred compliance debt must not be forgotten.
+
+### Rule: the Pre-Report Gate blocks on compliance
+
+Add compliance to the pre-report checklist — the gate does NOT clear until:
+- New code is compliant (no new errors/warnings)
+- Any compliance drift on pre-existing files has been flagged to the user with a recommendation
+
 ## Rules — Non-Negotiable
 
 ### NEVER
@@ -579,6 +634,8 @@ You:  "Type detection added. Detail endpoint now returns the type field. Tests p
 ### ALWAYS
 - Do minimal triage before delegating — enough to write a clear task, not a deep dive
 - Tell developers WHERE to look, not WHAT the code says — they read files themselves
+- **Include the compliance instruction in every developer prompt** — new code must be born compliant, and developers must run `{{config:commands.compliance}}` before returning
+- **Flag compliance drift on pre-existing files** — if this phase pushes an already-warn file over the error threshold (or a clean file into the warn zone), strongly advise the user to refactor in a separate thread
 - Verify developer output — run tests, check files exist, spot-check implementations
 - Stop at checkpoints that were actually triggered (user-requested, spec-marked, or genuine uncertainty about an irreversible step)
 - **Rename phase folders with `-done` suffix immediately after per-phase QA passes** — this is part of step 7, not a separate step
